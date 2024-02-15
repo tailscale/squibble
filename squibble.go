@@ -15,8 +15,8 @@
 // rules to bring it to the current state. If Apply fails, the database is
 // rolled back.
 //
-// The Schema tracks schema versions by hashing the SQL text with SHA256, and
-// it stores a record of upgrades in a _schema_history table that it maintains.
+// The Schema tracks schema versions by hashing the schema with SHA256, and it
+// stores a record of upgrades in a _schema_history table that it maintains.
 // Apply creates this table if it does not already exist, and updates it as
 // update rules are applied.
 //
@@ -57,6 +57,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -147,20 +148,32 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	// TODO(creachadair): Plumb an option for the table name.
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
   timestamp INTEGER UNIQUE NOT NULL,  -- Unix epoch microseconds.
-  digest TEXT NOT NULL,               -- hex-coded SHA256 of schema text
+  digest TEXT NOT NULL,               -- hex-coded SHA256 of schema runout
   schema BLOB                         -- zstd-compressed schema text (optional)
 )`, historyTableName)); err != nil {
 		return fmt.Errorf("create schema history: %w", err)
 	}
 
 	// Stage 2: Check whether the schema is up-to-date.
-	curHash := SchemaHash(s.Current)
+	curHash, err := SchemaHash(s.Current)
+	if err != nil {
+		return err
+	}
+	latestHash, err := DBHash(ctx, tx, "main")
+	if err != nil {
+		return err
+	}
+	if latestHash == curHash {
+		s.logf("Schema is up-to-date at digest %s", curHash)
+		return nil
+	}
+
 	hr, err := History(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("reading update history: %w", err)
 	} else if len(hr) == 0 {
 		// Case 1: There is no schema present in the history table.
-		if err := checkSchema(ctx, db, "main", s.Current); err == nil {
+		if err := checkSchema(ctx, tx, "main", s.Current); err == nil {
 			s.logf("No schema is defined, applying initial schema %s", curHash)
 			if _, err := tx.ExecContext(ctx, s.Current); err != nil {
 				return fmt.Errorf("apply current schema: %w", err)
@@ -181,24 +194,19 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 		return tx.Commit()
 	}
 
-	// Case 2: The current schema is already up-to-date.
-	latest := hr[len(hr)-1]
-	if latest.Digest == curHash {
-		s.logf("Schema is up-to-date at digest %s", curHash)
-		return nil
-	}
-
-	// Stage 3: Apply pending upgrades.
-	s.logf("Current schema digest is %s", curHash)
-	s.logf("Latest DB schema digest is %s (%s)", latest.Digest, formatTime(latest.Timestamp))
+	// Case 2: The current schema is not the latest.  Apply pending changes.
+	last := hr[len(hr)-1]
+	s.Logf("Last update at %s (%s)", formatTime(last.Timestamp), last.Digest)
+	s.logf("Latest DB schema is %s", latestHash)
+	s.logf("Target schema is %s", curHash)
 
 	// N.B. It is possible that a given schema will repeat in the history.  In
 	// that case, however, it doesn't matter which one we start from: All the
 	// upgrades following ANY copy of that schema apply to all of them.  We
 	// choose the last, just because it's less work if that happens.
-	i := s.firstPendingUpdate(latest.Digest)
+	i := s.firstPendingUpdate(latestHash)
 	if i < 0 {
-		return fmt.Errorf("no update found for digest %s (this binary may be too old)", latest.Digest)
+		return fmt.Errorf("no update found for digest %s (this binary may be too old)", latestHash)
 	}
 
 	// Apply all the updates from the latest hash to the present.
@@ -207,6 +215,15 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	for j, update := range s.Updates[i:] {
 		if err := update.Apply(uctx, tx); err != nil {
 			return fmt.Errorf("update failed at digest %s: %w", update.Source, err)
+		}
+		conf, err := DBHash(uctx, tx, "main")
+		if err != nil {
+			return fmt.Errorf("confirming update: %w", err)
+		}
+		if conf != update.Target {
+			sr, _ := readSchema(uctx, tx, "main")
+			log.Printf("MJF :: sr=%+v", sr)
+			return fmt.Errorf("confirming update: got %s, want %s", conf, update.Target)
 		}
 		s.logf("[%d] updated to digest %s", i+j+1, update.Target)
 	}
@@ -255,6 +272,10 @@ func (s *Schema) Check() error {
 	if s.Current == "" {
 		return errors.New("no current schema is defined")
 	}
+	hc, err := SchemaHash(s.Current)
+	if err != nil {
+		return err
+	}
 	var errs []error
 	var last string
 	for i, u := range s.Updates {
@@ -273,7 +294,6 @@ func (s *Schema) Check() error {
 		}
 		last = u.Target
 	}
-	hc := SchemaHash(s.Current)
 	if last != "" && last != hc {
 		errs = append(errs, fmt.Errorf("missing upgrade from %s to %s", last, hc))
 	}
@@ -310,10 +330,33 @@ type HistoryRow struct {
 	Schema    string // The SQL of the schema at this update
 }
 
-// SchemaHash computes a hex-encoded SHA256 digest of the specified text.
-func SchemaHash(text string) string {
-	h := sha256.Sum256([]byte(text))
-	return hex.EncodeToString(h[:])
+// SchemaHash computes a hex-encoded SHA256 digest of the SQLite schema encoded
+// by the specified string.
+func SchemaHash(text string) (string, error) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		return "", fmt.Errorf("open hash db: %w", err)
+	}
+	defer db.Close()
+	sr, err := schemaTextToRows(context.Background(), db, text)
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	json.NewEncoder(h).Encode(sr)
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// DBHash computes a hex-encoded SHA256 digest of the SQLite schema encoded in
+// the specified database.
+func DBHash(ctx context.Context, db DBConn, root string) (string, error) {
+	sr, err := readSchema(ctx, db, root)
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	json.NewEncoder(h).Encode(sr)
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func formatTime(us int64) string {

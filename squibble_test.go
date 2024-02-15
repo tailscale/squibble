@@ -47,6 +47,15 @@ func checkTableSchema(t *testing.T, db *sql.DB, table, want string) {
 	}
 }
 
+func mustHash(t *testing.T, text string) string {
+	t.Helper()
+	h, err := squibble.SchemaHash(text)
+	if err != nil {
+		t.Fatalf("SchemaHash failed: %v", err)
+	}
+	return h
+}
+
 func TestEmptySchema(t *testing.T) {
 	db := mustOpenDB(t)
 
@@ -86,7 +95,7 @@ func TestUpgrade(t *testing.T) {
 		s := &squibble.Schema{
 			Current: v2,
 			Updates: []squibble.UpdateRule{
-				{squibble.SchemaHash(v1), squibble.SchemaHash(v2),
+				{mustHash(t, v1), mustHash(t, v2),
 					squibble.Exec(`ALTER TABLE foo ADD COLUMN y text`)},
 			},
 			Logf: t.Logf,
@@ -101,9 +110,9 @@ func TestUpgrade(t *testing.T) {
 		s := &squibble.Schema{
 			Current: v3,
 			Updates: []squibble.UpdateRule{
-				{squibble.SchemaHash(v1), squibble.SchemaHash(v2),
+				{mustHash(t, v1), mustHash(t, v2),
 					squibble.Exec(`ALTER TABLE foo ADD COLUMN y text`)},
-				{squibble.SchemaHash(v2), squibble.SchemaHash(v3),
+				{mustHash(t, v2), mustHash(t, v3),
 					squibble.Exec(`CREATE TABLE bar (z integer not null)`)},
 			},
 			Logf: t.Logf,
@@ -143,6 +152,12 @@ create table foo (x text, y text);
 create table bar (z integer not null)`
 	const v5 = `-- drop a table
 create table bar (z integer not null)`
+	const v6 = `-- restore the table
+create table foo (x text, y text);
+create table bar (z integer not null)`
+	const v7 = `-- same, same
+create table foo (x text, y text);
+create table bar (z integer not null)`
 
 	t.Run("InitV1", func(t *testing.T) {
 		s := &squibble.Schema{Current: v1, Logf: t.Logf}
@@ -154,21 +169,21 @@ create table bar (z integer not null)`
 
 	t.Run("V2toV5", func(t *testing.T) {
 		s := &squibble.Schema{
-			Current: v5,
+			Current: v7,
 			Updates: []squibble.UpdateRule{
-				// History: v1 → v2 → v3 → v4 → v3 → v4 → v5
+				// History: v1 → v2 → v3 → (v4 = v3) → v5 → (v6 = v3) → (v7 = v3)
 				// The cycle exercises the correct handling of repeats.
-				{squibble.SchemaHash(v1), squibble.SchemaHash(v2),
+				{mustHash(t, v1), mustHash(t, v2),
 					squibble.Exec(`ALTER TABLE foo ADD COLUMN y text`)},
-				{squibble.SchemaHash(v2), squibble.SchemaHash(v3),
+				{mustHash(t, v2), mustHash(t, v3),
 					squibble.Exec(`CREATE TABLE bar (z integer not null)`)},
-				{squibble.SchemaHash(v3), squibble.SchemaHash(v4),
-					squibble.Exec(`DROP TABLE foo`)}, // occurrence 1
-				{squibble.SchemaHash(v4), squibble.SchemaHash(v3),
+				{mustHash(t, v3), mustHash(t, v4),
+					squibble.NoAction},
+				{mustHash(t, v4), mustHash(t, v5),
+					squibble.Exec(`DROP TABLE foo`)},
+				{mustHash(t, v5), mustHash(t, v6),
 					squibble.Exec(`CREATE TABLE foo (x text, y text)`)},
-				{squibble.SchemaHash(v3), squibble.SchemaHash(v4),
-					squibble.Exec(`DROP TABLE foo`)}, // occurrence 2
-				{squibble.SchemaHash(v4), squibble.SchemaHash(v5),
+				{mustHash(t, v6), mustHash(t, v7),
 					squibble.NoAction},
 			},
 			Logf: t.Logf,
@@ -192,7 +207,7 @@ create table bar (z integer not null)`
 	})
 
 	t.Run("Validate", func(t *testing.T) {
-		if err := squibble.Validate(context.Background(), db, v5); err != nil {
+		if err := squibble.Validate(context.Background(), db, v7); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -227,7 +242,7 @@ func TestUnmanaged(t *testing.T) {
 func TestInconsistent(t *testing.T) {
 	tmp := func(context.Context, *sql.Tx) error { panic("notused") }
 	bad1 := &squibble.Schema{
-		Current: "ok",
+		Current: "create table ok (a text)",
 		Updates: []squibble.UpdateRule{
 			{"", "def", tmp},    // missing source
 			{"abc", "", tmp},    // missing target
@@ -236,7 +251,7 @@ func TestInconsistent(t *testing.T) {
 		Logf: t.Logf,
 	}
 	bad2 := &squibble.Schema{
-		Current: "ok",
+		Current: "create table ok (a text)",
 		Updates: []squibble.UpdateRule{
 			{"abc", "def", tmp},
 			{"ghi", "jkl", tmp}, // missing link from def to ghi
@@ -255,7 +270,7 @@ func TestInconsistent(t *testing.T) {
 		{"NoFunc", bad1, "3: missing Apply function"},
 		{"BadStitch", bad2, "2: want source def, got ghi"},
 		{"NoTail", bad2, fmt.Sprintf("missing upgrade from %s to %s", "mno",
-			squibble.SchemaHash(bad2.Current))},
+			mustHash(t, bad2.Current))},
 	}
 	db := mustOpenDB(t)
 	ctx := context.Background()
