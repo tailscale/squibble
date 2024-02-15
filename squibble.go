@@ -52,14 +52,18 @@
 package squibble
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 const historyTableName = "_schema_history"
@@ -144,7 +148,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
   timestamp INTEGER UNIQUE NOT NULL,  -- Unix epoch microseconds.
   digest TEXT NOT NULL,               -- hex-coded SHA256 of schema text
-  schema TEXT                         -- schema text (optional)
+  schema BLOB                         -- zstd-compressed schema text (optional)
 )`, historyTableName)); err != nil {
 		return fmt.Errorf("create schema history: %w", err)
 	}
@@ -224,7 +228,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 func (s *Schema) addVersion(ctx context.Context, tx *sql.Tx, version HistoryRow) error {
 	_, err := tx.ExecContext(ctx, fmt.Sprintf(
 		`INSERT INTO %s (timestamp, digest, schema) VALUES (?, ?, ?)`, historyTableName),
-		version.Timestamp, version.Digest, version.Schema,
+		version.Timestamp, version.Digest, compress(version.Schema),
 	)
 	if err != nil {
 		return fmt.Errorf("record schema %s: %w", version.Digest, err)
@@ -289,9 +293,11 @@ func History(ctx context.Context, db DBConn) ([]HistoryRow, error) {
 	var out []HistoryRow
 	for rows.Next() {
 		var cur HistoryRow
-		if err := rows.Scan(&cur.Timestamp, &cur.Digest, &cur.Schema); err != nil {
+		var schemaBytes []byte
+		if err := rows.Scan(&cur.Timestamp, &cur.Digest, &schemaBytes); err != nil {
 			return nil, fmt.Errorf("scan history: %w", err)
 		}
+		cur.Schema = uncompress(schemaBytes)
 		out = append(out, cur)
 	}
 	return out, nil
@@ -312,4 +318,24 @@ func SchemaHash(text string) string {
 
 func formatTime(us int64) string {
 	return time.UnixMicro(us).UTC().Format(time.RFC3339Nano)
+}
+
+func compress(text string) []byte {
+	e, err := zstd.NewWriter(io.Discard)
+	if err != nil {
+		panic(fmt.Sprintf("NewWriter: %v", err))
+	}
+	return e.EncodeAll([]byte(text), nil)
+}
+
+func uncompress(blob []byte) string {
+	d, err := zstd.NewReader(bytes.NewReader(nil))
+	if err != nil {
+		panic(fmt.Sprintf("NewReader: %v", err))
+	}
+	dec, err := d.DecodeAll(blob, nil)
+	if err != nil {
+		return string(blob)
+	}
+	return string(dec)
 }

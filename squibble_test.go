@@ -183,7 +183,7 @@ create table bar (z integer not null)`
 		if err != nil {
 			t.Fatalf("History: unexpected error: %v", err)
 		}
-		t.Log("History of upgrades (reverse chronological):")
+		t.Log("History of upgrades (chronological):")
 		for i, h := range hr {
 			t.Logf("[%d] %s %s %q", i+1, time.UnixMicro(h.Timestamp).UTC().Format(time.RFC3339Nano),
 				h.Digest, h.Schema)
