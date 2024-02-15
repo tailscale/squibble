@@ -3,6 +3,8 @@ module github.com/tailscale/squibble
 go 1.22.0
 
 require (
+	github.com/creachadair/command v0.1.7
+	github.com/creachadair/flax v0.0.0-20240212192608-428acafa3bbe
 	github.com/google/go-cmp v0.6.0
 	github.com/klauspost/compress v1.17.6
 	modernc.org/sqlite v1.29.1
