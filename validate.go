@@ -39,7 +39,7 @@ func schemaTextToRows(ctx context.Context, db DBConn, schema string) ([]schemaRo
 	}
 	defer vdb.Close()
 	if _, err := vdb.ExecContext(ctx, schema); err != nil {
-		return nil, fmt.Errorf("init schema: %w", err)
+		return nil, fmt.Errorf("compile schema: %w", err)
 	}
 	return readSchema(ctx, vdb, "main")
 }
@@ -59,8 +59,8 @@ func (v ValidationError) Error() string {
 type schemaRow struct {
 	Type      string // e.g., "index", "table", "trigger", "view"
 	Name      string
-	TableName string         // affiliated table name (== Name for tables and views)
-	SQL       sql.NullString // the text of the definition (maybe)
+	TableName string // affiliated table name (== Name for tables and views)
+	SQL       string // the text of the definition (maybe)
 }
 
 func compareSchemaRows(a, b schemaRow) int {
@@ -71,7 +71,7 @@ func compareSchemaRows(a, b schemaRow) int {
 	} else if v := cmp.Compare(a.TableName, b.TableName); v != 0 {
 		return v
 	}
-	return cmp.Compare(a.SQL.String, b.SQL.String)
+	return cmp.Compare(a.SQL, b.SQL)
 }
 
 // DBConn is the subset of the sql.DB interface needed by the functions defined
@@ -81,6 +81,9 @@ type DBConn interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
+// readSchema reads the schema for the specified database and returns the
+// resulting rows sorted into a stable order. Rows belonging to the history
+// table and any affiliated indices are filtered out.
 func readSchema(ctx context.Context, db DBConn, root string) ([]schemaRow, error) {
 	rows, err := db.QueryContext(ctx,
 		fmt.Sprintf(`SELECT type, name, tbl_name, sql FROM %s.sqlite_schema`, root),
@@ -91,13 +94,14 @@ func readSchema(ctx context.Context, db DBConn, root string) ([]schemaRow, error
 	defer rows.Close()
 	var out []schemaRow
 	for rows.Next() {
-		var cur schemaRow
-		if err := rows.Scan(&cur.Type, &cur.Name, &cur.TableName, &cur.SQL); err != nil {
+		var rtype, name, tblName string
+		var sql sql.NullString
+		if err := rows.Scan(&rtype, &name, &tblName, &sql); err != nil {
 			return nil, fmt.Errorf("scan %s schema: %w", root, err)
-		} else if cur.TableName == "_schema_history" {
+		} else if tblName == "_schema_history" {
 			continue // skip the history table and its indices
 		}
-		out = append(out, cur)
+		out = append(out, schemaRow{Type: rtype, Name: name, TableName: tblName, SQL: sql.String})
 	}
 	slices.SortFunc(out, compareSchemaRows)
 	return out, nil
