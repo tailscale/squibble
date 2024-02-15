@@ -2,6 +2,9 @@
 
 Package squibble provides a schema migration assistant for SQLite databases.
 
+[![GoDoc](https://img.shields.io/static/v1?label=godoc&message=reference&color=white)](https://pkg.go.dev/github.com/tailscale/squibble)
+[![CI](https://github.com/tailscale/squibble/actions/workflows/go-presubmit.yml/badge.svg?event=push&branch=main)](https://github.com/tailscale/squibble/actions/workflows/go-presubmit.yml)
+
 A `Schema` value manages the schema of a SQLite database that will be modified
 over time.  The current database schema is stored in the Current field, and
 migrations from previous versions are captured as `UpdateRules`.
