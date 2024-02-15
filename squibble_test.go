@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -251,7 +252,8 @@ func TestInconsistent(t *testing.T) {
 		{"NoTarget", bad1, "2: missing target"},
 		{"NoFunc", bad1, "3: missing Apply function"},
 		{"BadStitch", bad2, "2: want source def, got ghi"},
-		{"NoTail", bad2, "missing upgrade to " + squibble.SchemaHash(bad2.Current)},
+		{"NoTail", bad2, fmt.Sprintf("missing upgrade from %s to %s", "mno",
+			squibble.SchemaHash(bad2.Current))},
 	}
 	db := mustOpenDB(t)
 	ctx := context.Background()

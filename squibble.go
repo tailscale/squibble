@@ -275,7 +275,7 @@ func (s *Schema) Check() error {
 	}
 	hc := SchemaHash(s.Current)
 	if last != "" && last != hc {
-		errs = append(errs, fmt.Errorf("missing upgrade to %s", hc))
+		errs = append(errs, fmt.Errorf("missing upgrade from %s to %s", last, hc))
 	}
 	return errors.Join(errs...)
 }
