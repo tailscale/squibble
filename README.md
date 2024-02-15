@@ -19,13 +19,21 @@ var schema = &squibble.Schema{
 	Current: dbSchema,
 
 	Updates: []squibble.UpdateRule{
+		// Each update gives the digests of the source and target schemas,
+		// and a function to modify the first into the second.
+		// The digests act as a version marker.
 		{"a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447",
 			"727e2659ac457a3c86da2203ebd2e7387767ffe9a93501def5a87034ee672750",
 			squibble.Exec(`CREATE TABLE foo (bar TEXT)`),
 		},
+		// The last update must end with the current schema.
+		// Note that multiple changes are permitted in a rule.
 		{"727e2659ac457a3c86da2203ebd2e7387767ffe9a93501def5a87034ee672750",
 			"f18496b875133e09906a26ba23ef0e5f4085c1507dc3efee9af619759cb0fafe",
-			squibble.Exec(`ALTER TABLE foo ADD COLUMN baz INTEGER NOT NULL`),
+			squibble.Exec(
+				`ALTER TABLE foo ADD COLUMN baz INTEGER NOT NULL`,
+				`DROP VIEW quux`,
+			),
 		},
 	},
 }
