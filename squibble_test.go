@@ -233,6 +233,7 @@ func TestInconsistent(t *testing.T) {
 			{"abc", "", tmp},    // missing target
 			{"abc", "def", nil}, // missing func
 		},
+		Logf: t.Logf,
 	}
 	bad2 := &squibble.Schema{
 		Current: "ok",
@@ -241,6 +242,7 @@ func TestInconsistent(t *testing.T) {
 			{"ghi", "jkl", tmp}, // missing link from def to ghi
 			{"jkl", "mno", tmp}, // missing link to current
 		},
+		Logf: t.Logf,
 	}
 	tests := []struct {
 		name  string
@@ -275,7 +277,7 @@ func TestCompatible(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		db := mustOpenDB(t)
 
-		s := &squibble.Schema{Current: schema}
+		s := &squibble.Schema{Current: schema, Logf: t.Logf}
 		if err := s.Apply(context.Background(), db); err != nil {
 			t.Errorf("Apply: unexpected error: %v", err)
 		}
@@ -290,7 +292,7 @@ func TestCompatible(t *testing.T) {
 			t.Fatalf("Initializing schema: %v", err)
 		}
 
-		s := &squibble.Schema{Current: "-- compatible schema\n" + schema}
+		s := &squibble.Schema{Current: "-- compatible schema\n" + schema, Logf: t.Logf}
 		if err := s.Apply(context.Background(), db); err != nil {
 			t.Errorf("Apply: unexpected error: %v", err)
 		}
