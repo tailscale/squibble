@@ -266,3 +266,34 @@ func TestInconsistent(t *testing.T) {
 		})
 	}
 }
+
+func TestCompatible(t *testing.T) {
+	const schema = `create table t (a text); create table u (b integer)`
+
+	t.Run("Empty", func(t *testing.T) {
+		db := mustOpenDB(t)
+
+		s := &squibble.Schema{Current: schema}
+		if err := s.Apply(context.Background(), db); err != nil {
+			t.Errorf("Apply: unexpected error: %v", err)
+		}
+		if err := squibble.Validate(context.Background(), db, schema); err != nil {
+			t.Errorf("Validate: unexpected error: %v", err)
+		}
+	})
+	t.Run("NonEmpty", func(t *testing.T) {
+		db := mustOpenDB(t)
+
+		if _, err := db.Exec(schema); err != nil {
+			t.Fatalf("Initializing schema: %v", err)
+		}
+
+		s := &squibble.Schema{Current: "-- compatible schema\n" + schema}
+		if err := s.Apply(context.Background(), db); err != nil {
+			t.Errorf("Apply: unexpected error: %v", err)
+		}
+		if err := squibble.Validate(context.Background(), db, schema); err != nil {
+			t.Errorf("Validate: unexpected error: %v", err)
+		}
+	})
+}

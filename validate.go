@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -17,30 +18,30 @@ import (
 // specified schema, and reports an error if there are discrepancies.
 // An error reported by Validate has concrete type ValidationError.
 func Validate(ctx context.Context, db DBConn, schema string) error {
-	vdb, err := sql.Open("sqlite", ":memory:")
+	comp, err := schemaTextToRows(ctx, db, schema)
 	if err != nil {
-		return fmt.Errorf("create validation db: %w", err)
+		return err
 	}
-	defer vdb.Close()
-	if _, err := vdb.ExecContext(ctx, schema); err != nil {
-		return fmt.Errorf("init schema: %w", err)
-	}
-
 	main, err := readSchema(ctx, db, "main")
 	if err != nil {
 		return err
 	}
-	slices.SortFunc(main, compareSchemaRows)
-	comp, err := readSchema(ctx, vdb, "main")
-	if err != nil {
-		return err
-	}
-	slices.SortFunc(comp, compareSchemaRows)
-
 	if diff := gocmp.Diff(main, comp); diff != "" {
 		return ValidationError{Diff: diff}
 	}
 	return nil
+}
+
+func schemaTextToRows(ctx context.Context, db DBConn, schema string) ([]schemaRow, error) {
+	vdb, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		return nil, fmt.Errorf("create validation db: %w", err)
+	}
+	defer vdb.Close()
+	if _, err := vdb.ExecContext(ctx, schema); err != nil {
+		return nil, fmt.Errorf("init schema: %w", err)
+	}
+	return readSchema(ctx, vdb, "main")
 }
 
 // ValidationError is the concrete type of errors reported by the Validate
@@ -98,13 +99,31 @@ func readSchema(ctx context.Context, db DBConn, root string) ([]schemaRow, error
 		}
 		out = append(out, cur)
 	}
+	slices.SortFunc(out, compareSchemaRows)
 	return out, nil
 }
 
-func schemaIsEssentiallyEmpty(ctx context.Context, db DBConn, root string) bool {
-	sr, err := readSchema(ctx, db, root)
+var errSchemaExists = errors.New("schema is already applied")
+
+// checkSchema reports whether the schema for the root database is compatible
+// with the given schema text. It returns nil if the root schema is essentially
+// empty (possibly but for a history table); it returns errSchemaExists if the
+// root schema exists and is equivalent. Any other error means the schemata are
+// either incompatible, or unreadable.
+func checkSchema(ctx context.Context, db DBConn, root, schema string) error {
+	main, err := readSchema(ctx, db, root)
 	if err != nil {
-		return false
+		return err
+	} else if len(main) == 0 || main[0].Name == historyTableName {
+		return nil
 	}
-	return len(sr) == 0 || (len(sr) == 1 && sr[0].Name == historyTableName)
+
+	comp, err := schemaTextToRows(ctx, db, schema)
+	if err != nil {
+		return err
+	}
+	if diff := gocmp.Diff(main, comp); diff != "" {
+		return ValidationError{Diff: diff}
+	}
+	return errSchemaExists
 }

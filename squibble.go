@@ -123,6 +123,10 @@ func Logf(ctx context.Context, msg string, args ...any) {
 // to db within it. If this succeeds and the transaction commits successfully,
 // then Apply succeeds. Otherwise, the transaction is rolled back and Apply
 // reports the reason wny.
+//
+// When applying a schema to an existing unmanaged database, Apply reports an
+// error if the current schema is not compatible with the existing schema;
+// otherwise it applies the current schema and updates the history.
 func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	if err := s.Check(); err != nil {
 		return err
@@ -151,15 +155,17 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("reading update history: %w", err)
 	} else if len(hr) == 0 {
-		// Case 1: There is no schema present in the history table. If the
-		// database is otherwise empty, apply the current one.
-		if !schemaIsEssentiallyEmpty(ctx, tx, "main") {
-			return errors.New("database has an unmanaged schema already")
-		}
-
-		s.logf("No schema is defined, applying initial schema %s", curHash)
-		if _, err := tx.ExecContext(ctx, s.Current); err != nil {
-			return fmt.Errorf("apply current schema: %w", err)
+		// Case 1: There is no schema present in the history table.
+		if err := checkSchema(ctx, db, "main", s.Current); err == nil {
+			s.logf("No schema is defined, applying initial schema %s", curHash)
+			if _, err := tx.ExecContext(ctx, s.Current); err != nil {
+				return fmt.Errorf("apply current schema: %w", err)
+			}
+		} else if errors.Is(err, errSchemaExists) {
+			s.logf("Schema %s is already current; updating history", curHash)
+			// fall through
+		} else {
+			return fmt.Errorf("unmanaged schema already present (%w)", err)
 		}
 		if err := s.addVersion(ctx, tx, HistoryRow{
 			Timestamp: time.Now().UnixMicro(),
