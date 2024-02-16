@@ -55,3 +55,34 @@ func main() {
    // ...how you do
 }
 ```
+
+## Usage Outline
+
+For the following, assume your schema is defined in a file `schema.sql` and the
+current database is `data.db`.
+
+1. Modify `schema.sql` to look like the schema you want the database to end up
+   with.
+
+2. Run `squibble diff data.db schema.sql`. This will print out the difference
+   between the database schema and the update, including the computed digests.
+
+   ```
+   db:  b9062f812474223063c121d058e23823bf750074d1eba26605bbebbc9fd20dbe
+   sql: 76a0ed44d8ad976d1de83bcb67d549dee2ab5bfb5af7d597d2548119e7359455
+   < human-readable-ish diff >
+   ```
+
+3. Using these digests, a new rule to the end of the `Upgrades` list like:
+
+   ```go
+   {
+     Source: "b9062f812474223063c121d058e23823bf750074d1eba26605bbebbc9fd20dbe",  // from the db
+     Target: "76a0ed44d8ad976d1de83bcb67d549dee2ab5bfb5af7d597d2548119e7359455",  // from the schema
+     Apply: squibble.Exec(`
+        ALTER TABLE foo ADD COLUMN bar TEXT UNIQUE NOT NULL DEFAULT 'xyzzy';
+        DROP VIEW IF EXISTS fuzzypants;
+        CREATE INDEX horse_index ON animal (species) WHERE (species = 'horse');
+     `),
+   }
+   ```
