@@ -112,13 +112,14 @@ func (s *Schema) logf(msg string, args ...any) {
 	}
 }
 
-type scLogKey struct{}
+type ctxSchemaKey struct{}
 
-// Logf sends a log message to the logger attached to ctx, or to log.Printf if
-// ctx does not have a logger attached. The context passed to the apply
-// function of an UpdateRule will have this set to the logger for the Schema.
-func Logf(ctx context.Context, msg string, args ...any) {
-	s, _ := ctx.Value(scLogKey{}).(*Schema)
+// ContextLogf sends a log message to the logger attached to ctx, or to
+// log.Printf if ctx does not have a logger attached. The context passed to the
+// apply function of an UpdateRule will have this set to the logger for the
+// Schema.
+func ContextLogf(ctx context.Context, msg string, args ...any) {
+	s, _ := ctx.Value(ctxSchemaKey{}).(*Schema)
 	s.logf(msg, args...)
 }
 
@@ -213,7 +214,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 
 	// Apply all the updates from the latest hash to the present.
 	s.logf("Applying %d pending schema upgrades", len(s.Updates)-i)
-	uctx := context.WithValue(ctx, scLogKey{}, s)
+	uctx := context.WithValue(ctx, ctxSchemaKey{}, s)
 	for j, update := range s.Updates[i:] {
 		if err := update.Apply(uctx, tx); err != nil {
 			return fmt.Errorf("update failed at digest %s: %w", update.Source, err)
