@@ -42,8 +42,8 @@ must be a SQLite database. Use --sql to explicitly specify SQL input.
 
 The output has the form:
 
-   db <hex>   -- if the input was a SQLite database
-   sql <hex>  -- if the input was a SQL schema file
+   db:  <hex>  -- if the input was a SQLite database
+   sql: <hex>  -- if the input was a SQL schema file
 `,
 				SetFlags: command.Flags(flax.MustBind, &digestFlags),
 				Run:      command.Adapt(runDigest),
@@ -76,6 +76,16 @@ func runDiff(env *command.Env, dbPath, sqlPath string) error {
 	if err != nil {
 		return err
 	}
+	dbHash, err := squibble.DBDigest(env.Context(), db, "main")
+	if err != nil {
+		return err
+	}
+	sqlHash, err := squibble.SQLDigest(string(sql))
+	if err != nil {
+		return err
+	}
+	fmt.Println("db: ", dbHash)
+	fmt.Println("sql:", sqlHash)
 	if err := squibble.Validate(env.Context(), db, string(sql)); err != nil {
 		fmt.Println(err.(squibble.ValidationError).Diff)
 		return errors.New("schema differs")
@@ -93,7 +103,7 @@ func runDigest(env *command.Env, path string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("sql", hash)
+		fmt.Println("sql:", hash)
 		return nil
 	}
 
@@ -107,7 +117,7 @@ func runDigest(env *command.Env, path string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("db", hash)
+	fmt.Println("db: ", hash)
 	return nil
 }
 
