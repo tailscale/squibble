@@ -176,8 +176,10 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 			if _, err := tx.ExecContext(ctx, s.Current); err != nil {
 				return fmt.Errorf("apply schema: %w", err)
 			}
+			s.logf("Initialized database with schema %s", curHash)
+		} else {
+			s.logf("Schema %s is already current; updating history", curHash)
 		}
-		s.logf("Schema %s is already current; updating history", curHash)
 		if err := s.addVersion(ctx, tx, HistoryRow{
 			Timestamp: time.Now(),
 			Digest:    curHash,
