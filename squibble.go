@@ -196,9 +196,9 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 
 	// Case 3: The current schema is not the latest.  Apply pending changes.
 	last := hr[len(hr)-1]
-	s.Logf("Last update at %s (%s)", last.Timestamp.Format(time.RFC3339Nano), last.Digest)
-	s.logf("Latest DB schema is %s", latestHash)
-	s.logf("Target schema is %s", curHash)
+	s.logf("Last updated to %s at %s", last.Digest, last.Timestamp.Format(time.RFC3339Nano))
+	s.logf("Current schema: %s", latestHash)
+	s.logf("Target schema:  %s", curHash)
 
 	// N.B. It is possible that a given schema will repeat in the history.  In
 	// that case, however, it doesn't matter which one we start from: All the
@@ -206,7 +206,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	// choose the last, just because it's less work if that happens.
 	i := s.firstPendingUpdate(latestHash)
 	if i < 0 {
-		return fmt.Errorf("no update found for digest %s (this binary may be too old)", latestHash)
+		return fmt.Errorf("no update found for digest %s (did you add an update rule?)", latestHash)
 	}
 
 	// Apply all the updates from the latest hash to the present.
