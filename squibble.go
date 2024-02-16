@@ -105,7 +105,7 @@ type UpdateRule struct {
 	//
 	// An apply function can use squibble.Logf(ctx, ...) to write log messages
 	// to the logger defined by the associated Schema.
-	Apply func(ctx context.Context, tx *sql.Tx) error
+	Apply func(ctx context.Context, db DBConn) error
 }
 
 func (s *Schema) logf(msg string, args ...any) {

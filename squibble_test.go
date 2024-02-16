@@ -268,7 +268,7 @@ func TestUnmanaged(t *testing.T) {
 }
 
 func TestInconsistent(t *testing.T) {
-	tmp := func(context.Context, *sql.Tx) error { panic("notused") }
+	tmp := func(context.Context, squibble.DBConn) error { panic("notused") }
 	bad1 := &squibble.Schema{
 		Current: "create table ok (a text)",
 		Updates: []squibble.UpdateRule{
