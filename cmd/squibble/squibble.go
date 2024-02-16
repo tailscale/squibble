@@ -58,7 +58,7 @@ func runDigest(env *command.Env, path string) error {
 		if err != nil {
 			return err
 		}
-		hash, err := squibble.SchemaHash(string(text))
+		hash, err := squibble.SQLDigest(string(text))
 		if err != nil {
 			return err
 		}
@@ -72,7 +72,7 @@ func runDigest(env *command.Env, path string) error {
 	}
 	defer db.Close()
 
-	hash, err := squibble.DBHash(context.Background(), db, "main")
+	hash, err := squibble.DBDigest(context.Background(), db, "main")
 	if err != nil {
 		return err
 	}

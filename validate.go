@@ -7,7 +7,6 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"slices"
 
@@ -107,27 +106,13 @@ func readSchema(ctx context.Context, db DBConn, root string) ([]schemaRow, error
 	return out, nil
 }
 
-var errSchemaExists = errors.New("schema is already applied")
-
-// checkSchema reports whether the schema for the root database is compatible
-// with the given schema text. It returns nil if the root schema is essentially
-// empty (possibly but for a history table); it returns errSchemaExists if the
-// root schema exists and is equivalent. Any other error means the schemata are
-// either incompatible, or unreadable.
-func checkSchema(ctx context.Context, db DBConn, root, schema string) error {
+// schemaIsEmpty reports whether the schema for the specified database is
+// essentially empty (meaning, it is either empty or contains only a history
+// table).
+func schemaIsEmpty(ctx context.Context, db DBConn, root string) bool {
 	main, err := readSchema(ctx, db, root)
 	if err != nil {
-		return err
-	} else if len(main) == 0 || main[0].Name == historyTableName {
-		return nil
+		return false
 	}
-
-	comp, err := schemaTextToRows(ctx, db, schema)
-	if err != nil {
-		return err
-	}
-	if diff := gocmp.Diff(main, comp); diff != "" {
-		return ValidationError{Diff: diff}
-	}
-	return errSchemaExists
+	return len(main) == 0 || (len(main) == 1 && main[0].Name == historyTableName)
 }

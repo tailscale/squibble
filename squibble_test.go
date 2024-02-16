@@ -49,7 +49,7 @@ func checkTableSchema(t *testing.T, db *sql.DB, table, want string) {
 
 func mustHash(t *testing.T, text string) string {
 	t.Helper()
-	h, err := squibble.SchemaHash(text)
+	h, err := squibble.SQLDigest(text)
 	if err != nil {
 		t.Fatalf("SchemaHash failed: %v", err)
 	}

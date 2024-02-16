@@ -155,17 +155,13 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	}
 
 	// Stage 2: Check whether the schema is up-to-date.
-	curHash, err := SchemaHash(s.Current)
+	curHash, err := SQLDigest(s.Current)
 	if err != nil {
 		return err
 	}
-	latestHash, err := DBHash(ctx, tx, "main")
+	latestHash, err := DBDigest(ctx, tx, "main")
 	if err != nil {
 		return err
-	}
-	if latestHash == curHash {
-		s.logf("Schema is up-to-date at digest %s", curHash)
-		return nil
 	}
 
 	hr, err := History(ctx, tx)
@@ -173,17 +169,15 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("reading update history: %w", err)
 	} else if len(hr) == 0 {
 		// Case 1: There is no schema present in the history table.
-		if err := checkSchema(ctx, tx, "main", s.Current); err == nil {
-			s.logf("No schema is defined, applying initial schema %s", curHash)
-			if _, err := tx.ExecContext(ctx, s.Current); err != nil {
-				return fmt.Errorf("apply current schema: %w", err)
+		if latestHash != curHash {
+			if !schemaIsEmpty(ctx, tx, "main") {
+				return fmt.Errorf("unmanaged schema already present (%w)", err)
 			}
-		} else if errors.Is(err, errSchemaExists) {
-			s.logf("Schema %s is already current; updating history", curHash)
-			// fall through
-		} else {
-			return fmt.Errorf("unmanaged schema already present (%w)", err)
+			if _, err := tx.ExecContext(ctx, s.Current); err != nil {
+				return fmt.Errorf("apply schema: %w", err)
+			}
 		}
+		s.logf("Schema %s is already current; updating history", curHash)
 		if err := s.addVersion(ctx, tx, HistoryRow{
 			Timestamp: time.Now().UnixMicro(),
 			Digest:    curHash,
@@ -194,7 +188,13 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 		return tx.Commit()
 	}
 
-	// Case 2: The current schema is not the latest.  Apply pending changes.
+	// Case 2: The current schema is up-to-date.
+	if latestHash == curHash {
+		s.logf("Schema is up-to-date at digest %s", curHash)
+		return nil
+	}
+
+	// Case 3: The current schema is not the latest.  Apply pending changes.
 	last := hr[len(hr)-1]
 	s.Logf("Last update at %s (%s)", formatTime(last.Timestamp), last.Digest)
 	s.logf("Latest DB schema is %s", latestHash)
@@ -216,7 +216,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 		if err := update.Apply(uctx, tx); err != nil {
 			return fmt.Errorf("update failed at digest %s: %w", update.Source, err)
 		}
-		conf, err := DBHash(uctx, tx, "main")
+		conf, err := DBDigest(uctx, tx, "main")
 		if err != nil {
 			return fmt.Errorf("confirming update: %w", err)
 		}
@@ -272,7 +272,7 @@ func (s *Schema) Check() error {
 	if s.Current == "" {
 		return errors.New("no current schema is defined")
 	}
-	hc, err := SchemaHash(s.Current)
+	hc, err := SQLDigest(s.Current)
 	if err != nil {
 		return err
 	}
@@ -330,9 +330,9 @@ type HistoryRow struct {
 	Schema    string // The SQL of the schema at this update
 }
 
-// SchemaHash computes a hex-encoded SHA256 digest of the SQLite schema encoded
+// SQLDigest computes a hex-encoded SHA256 digest of the SQLite schema encoded
 // by the specified string.
-func SchemaHash(text string) (string, error) {
+func SQLDigest(text string) (string, error) {
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		return "", fmt.Errorf("open hash db: %w", err)
@@ -347,9 +347,9 @@ func SchemaHash(text string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// DBHash computes a hex-encoded SHA256 digest of the SQLite schema encoded in
+// DBDigest computes a hex-encoded SHA256 digest of the SQLite schema encoded in
 // the specified database.
-func DBHash(ctx context.Context, db DBConn, root string) (string, error) {
+func DBDigest(ctx context.Context, db DBConn, root string) (string, error) {
 	sr, err := readSchema(ctx, db, root)
 	if err != nil {
 		return "", err
