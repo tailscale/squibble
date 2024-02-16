@@ -221,8 +221,6 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("confirming update: %w", err)
 		}
 		if conf != update.Target {
-			sr, _ := readSchema(uctx, tx, "main")
-			log.Printf("MJF :: sr=%+v", sr)
 			return fmt.Errorf("confirming update: got %s, want %s", conf, update.Target)
 		}
 		s.logf("[%d] updated to digest %s", i+j+1, update.Target)
