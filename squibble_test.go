@@ -166,7 +166,7 @@ create table bar (z integer not null)`
 		checkTableSchema(t, db, "foo", `create table foo (x text)`)
 	})
 
-	t.Run("V2toV5", func(t *testing.T) {
+	t.Run("V2toV7", func(t *testing.T) {
 		s := &squibble.Schema{
 			Current: v7,
 			Updates: []squibble.UpdateRule{
