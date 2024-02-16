@@ -1,4 +1,4 @@
-# SQLite Schema DIgests
+# SQLite Schema Digests
 
 ## For a SQLite Database
 
