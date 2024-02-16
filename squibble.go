@@ -49,6 +49,10 @@
 // special sqlite_schema table maintained by SQLite matches a schema written as
 // SQL text. If not, it reports a diff describing the differences between what
 // the text wants and what the real schema has.
+//
+// # Limitations
+//
+// Currently this package only handles the main database, not attachments.
 package squibble
 
 import (
@@ -160,7 +164,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	latestHash, err := DBDigest(ctx, tx, "main")
+	latestHash, err := DBDigest(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -219,7 +223,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 		if err := update.Apply(uctx, tx); err != nil {
 			return fmt.Errorf("update failed at digest %s: %w", update.Source, err)
 		}
-		conf, err := DBDigest(uctx, tx, "main")
+		conf, err := DBDigest(uctx, tx)
 		if err != nil {
 			return fmt.Errorf("confirming update: %w", err)
 		}
@@ -354,8 +358,8 @@ func SQLDigest(text string) (string, error) {
 
 // DBDigest computes a hex-encoded SHA256 digest of the SQLite schema encoded in
 // the specified database.
-func DBDigest(ctx context.Context, db DBConn, root string) (string, error) {
-	sr, err := readSchema(ctx, db, root)
+func DBDigest(ctx context.Context, db DBConn) (string, error) {
+	sr, err := readSchema(ctx, db, "main")
 	if err != nil {
 		return "", err
 	}

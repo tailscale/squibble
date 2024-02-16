@@ -76,7 +76,7 @@ func runDiff(env *command.Env, dbPath, sqlPath string) error {
 	if err != nil {
 		return err
 	}
-	dbHash, err := squibble.DBDigest(env.Context(), db, "main")
+	dbHash, err := squibble.DBDigest(env.Context(), db)
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func runDigest(env *command.Env, path string) error {
 	}
 	defer db.Close()
 
-	hash, err := squibble.DBDigest(env.Context(), db, "main")
+	hash, err := squibble.DBDigest(env.Context(), db)
 	if err != nil {
 		return err
 	}
