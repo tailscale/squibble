@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +25,12 @@ func main() {
 		Help: `A utility for managing SQLite schema updates.`,
 
 		Commands: []*command.C{
+			{
+				Name:  "diff",
+				Usage: "<db-path> <schema-path>",
+				Help:  `Compute the schema diff between a SQLite database and a SQL schema.`,
+				Run:   command.Adapt(runDiff),
+			},
 			{
 				Name:  "digest",
 				Usage: "<path>",
@@ -50,6 +57,22 @@ The output has the form:
 
 var digestFlags struct {
 	SQL bool `flag:"sql,Treat input as SQL text"`
+}
+
+func runDiff(env *command.Env, dbPath, sqlPath string) error {
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return fmt.Errorf("open db: %w", err)
+	}
+	sql, err := os.ReadFile(sqlPath)
+	if err != nil {
+		return err
+	}
+	if err := squibble.Validate(context.Background(), db, string(sql)); err != nil {
+		fmt.Println(err.(squibble.ValidationError).Diff)
+		return errors.New("schema differs")
+	}
+	return nil
 }
 
 func runDigest(env *command.Env, path string) error {
