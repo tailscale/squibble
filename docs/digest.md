@@ -5,8 +5,8 @@
 The `squibble` package uses a cryptographic hash of the SQLite database schema
 to identify versions. The algorithm used to compute the hash is as follows:
 
-- From each row of the `sqlite_schema` virtual table, read the `type`, `name`,
-  `tbl_name`, and `sql` columns.
+- From each row of the [`sqlite_schema`][sqstab] virtual table, read the
+  `type`, `name`, `tbl_name`, and `sql` columns.
 
 - Sort the resulting tuples lexicographically by `type`, then `name`, then
   `tbl_name`, then `sql`. If any column is null, treat it as the empty string.
@@ -32,3 +32,6 @@ To compute the digest for a schema definition encoded in SQL text:
 - Execute the schema definition.
 
 - Apply the algorithm above to compute the digest for the database schema.
+
+
+[sqstab]: https://sqlite.org/schematab.html#interpretation_of_the_schema_table
