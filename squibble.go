@@ -118,11 +118,10 @@ func (s *Schema) logf(msg string, args ...any) {
 
 type ctxSchemaKey struct{}
 
-// ContextLogf sends a log message to the logger attached to ctx, or to
-// log.Printf if ctx does not have a logger attached. The context passed to the
-// apply function of an UpdateRule will have this set to the logger for the
-// Schema.
-func ContextLogf(ctx context.Context, msg string, args ...any) {
+// Logf sends a log message to the logger attached to ctx, or to log.Printf if
+// ctx does not have a logger attached. The context passed to the apply
+// function of an UpdateRule will have this set to the logger for the Schema.
+func Logf(ctx context.Context, msg string, args ...any) {
 	s, _ := ctx.Value(ctxSchemaKey{}).(*Schema)
 	s.logf(msg, args...)
 }
