@@ -5,12 +5,13 @@
 package main
 
 import (
-	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/creachadair/command"
 	"github.com/creachadair/flax"
@@ -47,6 +48,13 @@ The output has the form:
 				SetFlags: command.Flags(flax.MustBind, &digestFlags),
 				Run:      command.Adapt(runDigest),
 			},
+			{
+				Name:     "history",
+				Usage:    "<db-path>",
+				Help:     `Print the schema history for a SQLite database.`,
+				SetFlags: command.Flags(flax.MustBind, &historyFlags),
+				Run:      command.Adapt(runHistory),
+			},
 			command.HelpCommand(nil),
 			command.VersionCommand(),
 		},
@@ -68,7 +76,7 @@ func runDiff(env *command.Env, dbPath, sqlPath string) error {
 	if err != nil {
 		return err
 	}
-	if err := squibble.Validate(context.Background(), db, string(sql)); err != nil {
+	if err := squibble.Validate(env.Context(), db, string(sql)); err != nil {
 		fmt.Println(err.(squibble.ValidationError).Diff)
 		return errors.New("schema differs")
 	}
@@ -95,10 +103,36 @@ func runDigest(env *command.Env, path string) error {
 	}
 	defer db.Close()
 
-	hash, err := squibble.DBDigest(context.Background(), db, "main")
+	hash, err := squibble.DBDigest(env.Context(), db, "main")
 	if err != nil {
 		return err
 	}
 	fmt.Println("db", hash)
+	return nil
+}
+
+var historyFlags struct {
+	JSON bool `flag:"json,Write history records as JSON"`
+}
+
+func runHistory(env *command.Env, dbPath string) error {
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return fmt.Errorf("open db: %w", err)
+	}
+	defer db.Close()
+
+	hr, err := squibble.History(env.Context(), db)
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(os.Stdout)
+	for _, h := range hr {
+		if historyFlags.JSON {
+			enc.Encode(h)
+		} else {
+			fmt.Printf("%s\t%s\t[%d bytes]\n", h.Timestamp.Format(time.RFC3339), h.Digest, len(h.Schema))
+		}
+	}
 	return nil
 }

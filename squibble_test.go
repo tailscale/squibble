@@ -131,8 +131,7 @@ func TestUpgrade(t *testing.T) {
 		}
 		t.Log("History of upgrades (chronological):")
 		for i, h := range hr {
-			t.Logf("[%d] %s %s %q", i+1, time.UnixMicro(h.Timestamp).UTC().Format(time.RFC3339Nano),
-				h.Digest, h.Schema)
+			t.Logf("[%d] %s %s %q", i+1, h.Timestamp.Format(time.RFC3339Nano), h.Digest, h.Schema)
 		}
 	})
 }
@@ -201,8 +200,7 @@ create table bar (z integer not null)`
 		}
 		t.Log("History of upgrades (chronological):")
 		for i, h := range hr {
-			t.Logf("[%d] %s %s %q", i+1, time.UnixMicro(h.Timestamp).UTC().Format(time.RFC3339Nano),
-				h.Digest, h.Schema)
+			t.Logf("[%d] %s %s %q", i+1, h.Timestamp.Format(time.RFC3339Nano), h.Digest, h.Schema)
 		}
 	})
 

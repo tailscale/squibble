@@ -179,7 +179,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 		}
 		s.logf("Schema %s is already current; updating history", curHash)
 		if err := s.addVersion(ctx, tx, HistoryRow{
-			Timestamp: time.Now().UnixMicro(),
+			Timestamp: time.Now(),
 			Digest:    curHash,
 			Schema:    s.Current,
 		}); err != nil {
@@ -196,7 +196,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 
 	// Case 3: The current schema is not the latest.  Apply pending changes.
 	last := hr[len(hr)-1]
-	s.Logf("Last update at %s (%s)", formatTime(last.Timestamp), last.Digest)
+	s.Logf("Last update at %s (%s)", last.Timestamp.Format(time.RFC3339Nano), last.Digest)
 	s.logf("Latest DB schema is %s", latestHash)
 	s.logf("Target schema is %s", curHash)
 
@@ -229,7 +229,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	}
 	// Now record that we made it to the front of the history.
 	if err := s.addVersion(ctx, tx, HistoryRow{
-		Timestamp: time.Now().UnixMicro(),
+		Timestamp: time.Now(),
 		Digest:    curHash,
 		Schema:    s.Current,
 	}); err != nil {
@@ -245,7 +245,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 func (s *Schema) addVersion(ctx context.Context, tx *sql.Tx, version HistoryRow) error {
 	_, err := tx.ExecContext(ctx, fmt.Sprintf(
 		`INSERT INTO %s (timestamp, digest, schema) VALUES (?, ?, ?)`, historyTableName),
-		version.Timestamp, version.Digest, compress(version.Schema),
+		version.Timestamp.UnixMicro(), version.Digest, compress(version.Schema),
 	)
 	if err != nil {
 		return fmt.Errorf("record schema %s: %w", version.Digest, err)
@@ -312,22 +312,26 @@ func History(ctx context.Context, db DBConn) ([]HistoryRow, error) {
 	defer rows.Close()
 	var out []HistoryRow
 	for rows.Next() {
-		var cur HistoryRow
+		var ts int64
+		var digest string
 		var schemaBytes []byte
-		if err := rows.Scan(&cur.Timestamp, &cur.Digest, &schemaBytes); err != nil {
+		if err := rows.Scan(&ts, &digest, &schemaBytes); err != nil {
 			return nil, fmt.Errorf("scan history: %w", err)
 		}
-		cur.Schema = uncompress(schemaBytes)
-		out = append(out, cur)
+		out = append(out, HistoryRow{
+			Timestamp: time.UnixMicro(ts).UTC(),
+			Digest:    digest,
+			Schema:    uncompress(schemaBytes),
+		})
 	}
 	return out, nil
 }
 
 // HistoryRow is a row in the schema history maintained by the Schema type.
 type HistoryRow struct {
-	Timestamp int64  // Unix epoch microseconds
-	Digest    string // The digest of the schema at this update
-	Schema    string // The SQL of the schema at this update
+	Timestamp time.Time `json:"timestamp"`     // In UTC
+	Digest    string    `json:"digest"`        // The digest of the schema at this update
+	Schema    string    `json:"sql,omitempty"` // The SQL of the schema at this update
 }
 
 // SQLDigest computes a hex-encoded SHA256 digest of the SQLite schema encoded
@@ -359,10 +363,6 @@ func DBDigest(ctx context.Context, db DBConn, root string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func formatTime(us int64) string {
-	return time.UnixMicro(us).UTC().Format(time.RFC3339Nano)
-}
-
 func compress(text string) []byte {
 	e, err := zstd.NewWriter(io.Discard)
 	if err != nil {
@@ -372,6 +372,9 @@ func compress(text string) []byte {
 }
 
 func uncompress(blob []byte) string {
+	if len(blob) == 0 {
+		return ""
+	}
 	d, err := zstd.NewReader(bytes.NewReader(nil))
 	if err != nil {
 		panic(fmt.Sprintf("NewReader: %v", err))
