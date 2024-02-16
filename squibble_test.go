@@ -220,6 +220,36 @@ create table bar (z integer not null)`
 	})
 }
 
+func TestBadUpgrade(t *testing.T) {
+	db := mustOpenDB(t)
+
+	const v1 = `create table foo (x text not null)`
+	const v2 = `create table foo (x text not null, y integer not null default 0)`
+
+	// Initialize the database with schema v1.
+	s := &squibble.Schema{Current: v1, Logf: t.Logf}
+	if err := s.Apply(context.Background(), db); err != nil {
+		t.Fatalf("Apply initial schema: %v", err)
+	}
+
+	// Now target an upgrade to schema v2, but in which the upgrade rule does
+	// not produce a result equivalent to v2.
+	s.Current = v2
+	s.Updates = append(s.Updates, squibble.UpdateRule{
+		Source: mustHash(t, v1),
+		Target: mustHash(t, v2),
+		Apply: squibble.Exec(`
+           ALTER TABLE foo ADD COLUMN y INTEGER NOT NULL DEFAULT 0;  -- OK
+           ALTER TABLE foo ADD COLUMN z BLOB;  -- not expected
+      `),
+	})
+	if err := s.Apply(context.Background(), db); err == nil {
+		t.Error("Apply should have failed, but did not")
+	} else {
+		t.Logf("Apply: got expected error: %v", err)
+	}
+}
+
 func TestUnmanaged(t *testing.T) {
 	db := mustOpenDB(t)
 
