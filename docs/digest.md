@@ -34,4 +34,4 @@ To compute the digest for a schema definition encoded in SQL text:
 - Apply the algorithm above to compute the digest for the database schema.
 
 
-[sqstab]: https://sqlite.org/schematab.html#interpretation_of_the_schema_table
+[sqstab]: https://sqlite.org/schematab.html
