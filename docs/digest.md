@@ -35,9 +35,9 @@ To compute the digest for a schema definition encoded in SQL text:
 
 ## Notes
 
-This algorithm depends upon the stability of the canonicalization of the SQL
-schema definitions performed by SQLite. If the canonicalization rules change,
-the digest may change.
+This algorithm depends upon the stability of the normalization of SQL schema
+definitions performed by SQLite. If the normalization rules change, the digest
+may change.
 
 This approach also means that definitions which are semantically equivalent may
 not hash equal. For example, given:
