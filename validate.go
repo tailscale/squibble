@@ -9,13 +9,12 @@ import (
 	"database/sql"
 	"fmt"
 	"slices"
-
-	gocmp "github.com/google/go-cmp/cmp"
 )
 
 // Validate checks whether the current schema of db appears to match the
 // specified schema, and reports an error if there are discrepancies.
-// An error reported by Validate has concrete type ValidationError.
+// An error reported by Validate has concrete type ValidationError if
+// the schemas differ.
 func Validate(ctx context.Context, db DBConn, schema string) error {
 	comp, err := schemaTextToRows(ctx, db, schema)
 	if err != nil {
@@ -25,7 +24,7 @@ func Validate(ctx context.Context, db DBConn, schema string) error {
 	if err != nil {
 		return err
 	}
-	if diff := gocmp.Diff(main, comp); diff != "" {
+	if diff := diffSchema(main, comp); diff != "" {
 		return ValidationError{Diff: diff}
 	}
 	return nil
