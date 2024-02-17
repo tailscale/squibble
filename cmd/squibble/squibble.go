@@ -121,7 +121,8 @@ func runDiff(env *command.Env, dbPath, sqlPath string) error {
 		if err != nil {
 			return fmt.Errorf("format source template: %w", err)
 		}
-		fmt.Println(strings.TrimPrefix(string(src), prefix))
+		// N.B. Add a trailing comma so it can be spliced into a slice literal.
+		fmt.Println(strings.TrimPrefix(string(src)+",", prefix))
 		return nil
 	}
 
