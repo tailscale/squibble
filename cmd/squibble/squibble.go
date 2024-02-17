@@ -5,12 +5,15 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/format"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/creachadair/command"
@@ -27,10 +30,11 @@ func main() {
 
 		Commands: []*command.C{
 			{
-				Name:  "diff",
-				Usage: "<db-path> <schema-path>",
-				Help:  `Compute the schema diff between a SQLite database and a SQL schema.`,
-				Run:   command.Adapt(runDiff),
+				Name:     "diff",
+				Usage:    "<db-path> <schema-path>",
+				Help:     `Compute the schema diff between a SQLite database and a SQL schema.`,
+				SetFlags: command.Flags(flax.MustBind, &diffFlags),
+				Run:      command.Adapt(runDiff),
 			},
 			{
 				Name:  "digest",
@@ -63,8 +67,8 @@ The output has the form:
 	command.RunOrFail(env, os.Args[1:])
 }
 
-var digestFlags struct {
-	SQL bool `flag:"sql,Treat input as SQL text"`
+var diffFlags struct {
+	Rule bool `flag:"rule,Render the diff as a rule template"`
 }
 
 func runDiff(env *command.Env, dbPath, sqlPath string) error {
@@ -84,13 +88,55 @@ func runDiff(env *command.Env, dbPath, sqlPath string) error {
 	if err != nil {
 		return err
 	}
+	verr := squibble.Validate(env.Context(), db, string(sql))
+
+	// Case 1: We are asked to print an update rule template.  In this case, it
+	// is an error if there is NO difference, since a template doesn't make
+	// sense in that case.
+	if diffFlags.Rule {
+		if verr == nil {
+			return fmt.Errorf("schema is identical (digest %s)", dbHash)
+		}
+
+		// Render the diff digests as Go source.
+		//
+		// To make the Go formatter work, we need a valid top-level declaration.
+		// here we use a variable declaration, with a stylized form that we can
+		// recognize and trip back off afterward.
+		var buf bytes.Buffer
+		const prefix = "var _ = XX"
+		fmt.Fprintf(&buf, `%[1]s{
+        Source: %[2]q,
+        Target: %[3]q,
+        Apply: func(ctx context.Context, db squibble.DBConn) error {
+          /* Schema diff:
+%[4]s
+           */
+          panic("not implemented")
+        },
+      }`, prefix, dbHash, sqlHash, verr.(squibble.ValidationError).Diff)
+
+		// If this fails, it probably means the code above is wrong.
+		src, err := format.Source(buf.Bytes())
+		if err != nil {
+			return fmt.Errorf("format source template: %w", err)
+		}
+		fmt.Println(strings.TrimPrefix(string(src), prefix))
+		return nil
+	}
+
+	// Case 2: We are asked to print a diff.
 	fmt.Println("db: ", dbHash)
 	fmt.Println("sql:", sqlHash)
-	if err := squibble.Validate(env.Context(), db, string(sql)); err != nil {
-		fmt.Println(err.(squibble.ValidationError).Diff)
+	if verr != nil {
+		fmt.Println(verr.(squibble.ValidationError).Diff)
 		return errors.New("schema differs")
 	}
 	return nil
+}
+
+var digestFlags struct {
+	SQL bool `flag:"sql,Treat input as SQL text"`
 }
 
 func runDigest(env *command.Env, path string) error {

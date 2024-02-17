@@ -86,3 +86,9 @@ current database is `data.db`.
      `),
    }
    ```
+
+   Use `squibble diff --rule data.db schema.sql` to generate a copyable Go
+   source text in this format. You will need to fill in the update rule, but
+   The human-readable diff will be included as a comment to make it easier to
+   figure out what to write. You should delete the comment before merging the
+   rule, for legibility.
