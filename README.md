@@ -88,7 +88,33 @@ current database is `data.db`.
    ```
 
    Use `squibble diff --rule data.db schema.sql` to generate a copyable Go
-   source text in this format. You will need to fill in the update rule, but
-   The human-readable diff will be included as a comment to make it easier to
-   figure out what to write. You should delete the comment before merging the
-   rule, for legibility.
+   source text in this format. For example:
+
+   ```go
+   {
+       Source: "b9062f812474223063c121d058e23823bf750074d1eba26605bbebbc9fd20dbe",
+       Target: "19f912a1c7e7c9318204ca007558701f2d3f7cd57600e36eb0e7f4b241ee5a6f",
+       Apply: func(ctx context.Context, db squibble.DBConn) error {
+           /* Schema diff:
+
+           -- Modify table Cabbage
+           x   raw BLOB NOT NULL, -- JSON types.Object
+           +   count INTEGER NOT NULL DEFAULT 0,
+
+           DROP TRIGGER CabbageDel;
+
+           -- Add table lard
+           + CREATE TABLE lard (z integer, s text unique)
+
+           */
+           panic("not implemented")
+       },
+    }
+    ```
+
+   You will still need to fill in the update rule implementation, but a
+   human-readable summary of the changes will be included as a comment to make
+   it easier to figure out what to write.  As shown in the example above, the
+   `squibble.Exec` function can be helpful for simple changes.
+
+   You should delete the comment before merging the rule, for legibility.
