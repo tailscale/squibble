@@ -175,7 +175,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 		// Case 1: There is no schema present in the history table.
 		if latestHash != curHash {
 			if !schemaIsEmpty(ctx, tx, "main") {
-				return fmt.Errorf("unmanaged schema already present (%w)", err)
+				return errors.New("unmanaged schema already present")
 			}
 			if _, err := tx.ExecContext(ctx, s.Current); err != nil {
 				return fmt.Errorf("apply schema: %w", err)
@@ -341,12 +341,7 @@ type HistoryRow struct {
 // SQLDigest computes a hex-encoded SHA256 digest of the SQLite schema encoded
 // by the specified string.
 func SQLDigest(text string) (string, error) {
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		return "", fmt.Errorf("open hash db: %w", err)
-	}
-	defer db.Close()
-	sr, err := schemaTextToRows(context.Background(), db, text)
+	sr, err := schemaTextToRows(context.Background(), text)
 	if err != nil {
 		return "", err
 	}

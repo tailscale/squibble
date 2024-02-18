@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Validate checks whether the current schema of db appears to match the
@@ -16,7 +17,7 @@ import (
 // An error reported by Validate has concrete type ValidationError if
 // the schemas differ.
 func Validate(ctx context.Context, db DBConn, schema string) error {
-	comp, err := schemaTextToRows(ctx, db, schema)
+	comp, err := schemaTextToRows(ctx, schema)
 	if err != nil {
 		return err
 	}
@@ -30,16 +31,21 @@ func Validate(ctx context.Context, db DBConn, schema string) error {
 	return nil
 }
 
-func schemaTextToRows(ctx context.Context, db DBConn, schema string) ([]schemaRow, error) {
+func schemaTextToRows(ctx context.Context, schema string) ([]schemaRow, error) {
 	vdb, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		return nil, fmt.Errorf("create validation db: %w", err)
 	}
 	defer vdb.Close()
-	if _, err := vdb.ExecContext(ctx, schema); err != nil {
+	tx, err := vdb.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, schema); err != nil {
 		return nil, fmt.Errorf("compile schema: %w", err)
 	}
-	return readSchema(ctx, vdb, "main")
+	return readSchema(ctx, tx, "main")
 }
 
 // ValidationError is the concrete type of errors reported by the Validate
@@ -57,8 +63,33 @@ func (v ValidationError) Error() string {
 type schemaRow struct {
 	Type      string // e.g., "index", "table", "trigger", "view"
 	Name      string
-	TableName string // affiliated table name (== Name for tables and views)
-	SQL       string // the text of the definition (maybe)
+	TableName string      // affiliated table name (== Name for tables and views)
+	Columns   []schemaCol // for tables, the columns
+	SQL       string      // the text of the definition (maybe)
+}
+
+type schemaCol struct {
+	Name       string // column name
+	Type       string // type description
+	NotNull    bool   // whether the column is marked NOT NULL
+	Default    any    // the default value
+	PrimaryKey bool   // whether this column is part of the primary key
+	Hidden     int    // 0=normal, 1=hidden, 2=generated virtual, 3=generated stored
+}
+
+func (c schemaCol) String() string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%q %s", c.Name, c.Type)
+	if c.NotNull {
+		fmt.Fprint(&sb, " not null")
+	}
+	if c.Default != nil {
+		fmt.Fprintf(&sb, " default=%v", c.Default)
+	}
+	if c.PrimaryKey {
+		fmt.Fprint(&sb, " primary key")
+	}
+	return sb.String()
 }
 
 func compareSchemaRows(a, b schemaRow) int {
@@ -100,8 +131,45 @@ func readSchema(ctx context.Context, db DBConn, root string) ([]schemaRow, error
 			continue // skip the history table and its indices
 		}
 		out = append(out, schemaRow{Type: rtype, Name: name, TableName: tblName, SQL: sql.String})
+
+		// For tables: Read out the column information.
+		if rtype == "table" {
+			cols, err := readColumns(ctx, db, root, name)
+			if err != nil {
+				return nil, err
+			}
+			out[len(out)-1].Columns = cols
+		}
 	}
 	slices.SortFunc(out, compareSchemaRows)
+	return out, nil
+}
+
+// readColumns reads the schema metadata for the columns of the specified table.
+func readColumns(ctx context.Context, db DBConn, root, table string) ([]schemaCol, error) {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`PRAGMA %s.table_xinfo('%s')`, root, table))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []schemaCol
+	for rows.Next() {
+		var idIgnored, notNull, isPK, hidden int
+		var name, ctype string
+		var defValue any
+
+		if err := rows.Scan(&idIgnored, &name, &ctype, &notNull, &defValue, &isPK, &hidden); err != nil {
+			return nil, fmt.Errorf("scan %s columns: %w", table, err)
+		}
+		out = append(out, schemaCol{
+			Name:       name,
+			Type:       ctype,
+			NotNull:    notNull != 0,
+			Default:    defValue,
+			PrimaryKey: isPK != 0,
+			Hidden:     hidden,
+		})
+	}
 	return out, nil
 }
 

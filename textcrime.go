@@ -29,19 +29,46 @@ func diffSchema(ar, br []schemaRow) string {
 	for _, r := range ar {
 		o, ok := rhs[key(r)]
 		if !ok {
-			fmt.Fprintf(&sb, "\nDROP %s %s;\n", strings.ToUpper(r.Type), r.Name)
+			fmt.Fprintf(&sb, "\n>> Remove %s %q\n", r.Type, r.Name)
+		} else if dc := slice.EditScript(r.Columns, o.Columns); len(dc) != 0 {
+			fmt.Fprintf(&sb, "\n>> Modify %s %q\n", r.Type, r.Name)
+			diffColumns(&sb, dc, r.Columns, o.Columns)
 		} else if r.SQL != o.SQL {
-			fmt.Fprintf(&sb, "\n-- Modify %s %s\n", r.Type, r.Name)
+			fmt.Fprintf(&sb, "\n>> Modify %s %q\n", r.Type, r.Name)
 			diffSQL(&sb, r.SQL, o.SQL)
 		}
 	}
 	for _, r := range br {
 		if _, ok := lhs[key(r)]; !ok && r.SQL != "" {
-			fmt.Fprintf(&sb, "\n-- Add %s %s\n", r.Type, r.Name)
+			fmt.Fprintf(&sb, "\n>> Add %s %q\n", r.Type, r.Name)
 			diffSQL(&sb, "", r.SQL)
 		}
 	}
 	return sb.String()
+}
+
+func diffColumns(w io.Writer, dc []slice.Edit, lhs, rhs []schemaCol) {
+	i := 0
+	for _, e := range dc {
+		switch e.Op {
+		case slice.OpCopy:
+			for j := e.X; j < e.X+e.N; j++ {
+				fmt.Fprintf(w, " + add column %v\n", rhs[j])
+			}
+		case slice.OpReplace:
+			for j := e.X; j < e.X+e.N; j++ {
+				fmt.Fprintf(w, " ! replace column %v\n   with %v\n", lhs[i], rhs[j])
+				i++
+			}
+		case slice.OpDrop:
+			for j := i; j < i+e.N; j++ {
+				fmt.Fprintf(w, " - remove column %v\n", lhs[j])
+			}
+			i += e.N
+		case slice.OpEmit:
+			i += e.N
+		}
+	}
 }
 
 func lines(s string) []string {
@@ -56,16 +83,18 @@ func diffSQL(w io.Writer, a, b string) {
 	i := 0
 	for _, e := range slice.EditScript(lhs, rhs) {
 		switch e.Op {
-		case slice.OpCopy, slice.OpReplace:
+		case slice.OpCopy:
 			for j := e.X; j < e.X+e.N; j++ {
-				fmt.Fprintf(w, "%c %s\n", e.Op, rhs[j])
+				fmt.Fprintf(w, " + %s\n", rhs[j])
 			}
-			if e.Op == slice.OpReplace {
-				i += e.N
+		case slice.OpReplace:
+			for j := e.X; j < e.X+e.N; j++ {
+				fmt.Fprintf(w, " ! %s\n + %s\n", lhs[i], rhs[j])
+				i++
 			}
 		case slice.OpDrop:
 			for j := i; j < i+e.N; j++ {
-				fmt.Fprintf(w, "- %s\n", lhs[j])
+				fmt.Fprintf(w, " - %s\n", lhs[j])
 			}
 			i += e.N
 		case slice.OpEmit:
