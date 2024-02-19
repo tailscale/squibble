@@ -92,25 +92,24 @@ current database is `data.db`.
 
    ```go
    {
-       Source: "b9062f812474223063c121d058e23823bf750074d1eba26605bbebbc9fd20dbe",
-       Target: "19f912a1c7e7c9318204ca007558701f2d3f7cd57600e36eb0e7f4b241ee5a6f",
+       Source: "8d4f9b3e29aeca09e891460bf5ed08f12b84f6887b46a61082c339d49d7e0be8",
+       Target: "b196954e613b770a4a1c0a07b96f6e03cb86923a226c2b53bd523fb759fef3d6",
        Apply: func(ctx context.Context, db squibble.DBConn) error {
            /* Schema diff:
 
-           -- Modify table Cabbage
-           x   raw BLOB NOT NULL, -- JSON types.Object
-           +   count INTEGER NOT NULL DEFAULT 0,
+           >> Modify table "Templates"
+            ! replace column "raw" BLOB
+              with "raw" BLOB not null
+            + add column "count" INTEGER not null default=0
 
-           DROP TRIGGER CabbageDel;
-
-           -- Add table lard
-           + CREATE TABLE lard (z integer, s text unique)
+           >> Add table "lard"
+            + CREATE TABLE lard (z integer, s text unique)
 
            */
            panic("not implemented")
        },
-    }
-    ```
+   },
+   ```
 
    You will still need to fill in the update rule implementation, but a
    human-readable summary of the changes will be included as a comment to make
