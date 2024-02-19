@@ -47,26 +47,21 @@ func diffSchema(ar, br []schemaRow) string {
 	return sb.String()
 }
 
-func diffColumns(w io.Writer, dc []slice.Edit, lhs, rhs []schemaCol) {
-	i := 0
+func diffColumns(w io.Writer, dc []slice.Edit[schemaCol], lhs, rhs []schemaCol) {
 	for _, e := range dc {
 		switch e.Op {
 		case slice.OpCopy:
-			for j := e.X; j < e.X+e.N; j++ {
-				fmt.Fprintf(w, " + add column %v\n", rhs[j])
+			for _, col := range e.Y {
+				fmt.Fprintf(w, " + add column %v\n", col)
 			}
 		case slice.OpReplace:
-			for j := e.X; j < e.X+e.N; j++ {
-				fmt.Fprintf(w, " ! replace column %v\n   with %v\n", lhs[i], rhs[j])
-				i++
+			for i, old := range e.X {
+				fmt.Fprintf(w, " ! replace column %v\n   with %v\n", old, e.Y[i])
 			}
 		case slice.OpDrop:
-			for j := i; j < i+e.N; j++ {
-				fmt.Fprintf(w, " - remove column %v\n", lhs[j])
+			for _, col := range e.X {
+				fmt.Fprintf(w, " - remove column %v\n", col)
 			}
-			i += e.N
-		case slice.OpEmit:
-			i += e.N
 		}
 	}
 }
@@ -79,26 +74,20 @@ func lines(s string) []string {
 }
 
 func diffSQL(w io.Writer, a, b string) {
-	lhs, rhs := lines(a), lines(b)
-	i := 0
-	for _, e := range slice.EditScript(lhs, rhs) {
+	for _, e := range slice.EditScript(lines(a), lines(b)) {
 		switch e.Op {
 		case slice.OpCopy:
-			for j := e.X; j < e.X+e.N; j++ {
-				fmt.Fprintf(w, " + %s\n", rhs[j])
+			for _, s := range e.Y {
+				fmt.Fprintf(w, " + %s\n", s)
 			}
 		case slice.OpReplace:
-			for j := e.X; j < e.X+e.N; j++ {
-				fmt.Fprintf(w, " ! %s\n + %s\n", lhs[i], rhs[j])
-				i++
+			for i, s := range e.X {
+				fmt.Fprintf(w, " ! %s\n + %s\n", s, e.Y[i])
 			}
 		case slice.OpDrop:
-			for j := i; j < i+e.N; j++ {
-				fmt.Fprintf(w, " - %s\n", lhs[j])
+			for _, s := range e.X {
+				fmt.Fprintf(w, " - %s\n", s)
 			}
-			i += e.N
-		case slice.OpEmit:
-			i += e.N
 		}
 	}
 }
