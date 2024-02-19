@@ -297,7 +297,7 @@ func TestInconsistent(t *testing.T) {
 		{"NoTarget", bad1, "2: missing target"},
 		{"NoFunc", bad1, "3: missing Apply function"},
 		{"BadStitch", bad2, "2: want source def, got ghi"},
-		{"NoTail", bad2, fmt.Sprintf("missing upgrade from %s to %s", "mno",
+		{"NoTail", bad2, fmt.Sprintf("missing upgrade from %s to target %s", "mno",
 			mustHash(t, bad2.Current))},
 	}
 	db := mustOpenDB(t)

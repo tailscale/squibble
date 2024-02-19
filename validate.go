@@ -103,6 +103,18 @@ func compareSchemaRows(a, b schemaRow) int {
 	return cmp.Compare(a.SQL, b.SQL)
 }
 
+func compareSchemaCols(a, b schemaCol) int {
+	if v := cmp.Compare(a.Type, b.Type); v != 0 {
+		return v
+	} else if v := cmp.Compare(a.Name, b.Name); v != 0 {
+		return v
+	}
+	return cmp.Compare(
+		fmt.Sprintf("%v %v %v %d", a.NotNull, a.PrimaryKey, a.Default != nil, a.Hidden),
+		fmt.Sprintf("%v %v %v %d", b.NotNull, b.PrimaryKey, b.Default != nil, b.Hidden),
+	)
+}
+
 // DBConn is the subset of the sql.DB interface needed by the functions defined
 // in this package.
 type DBConn interface {
@@ -170,6 +182,7 @@ func readColumns(ctx context.Context, db DBConn, root, table string) ([]schemaCo
 			Hidden:     hidden,
 		})
 	}
+	slices.SortFunc(out, compareSchemaCols)
 	return out, nil
 }
 

@@ -203,8 +203,8 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	// Case 3: The current schema is not the latest.  Apply pending changes.
 	last := hr[len(hr)-1]
 	s.logf("Last updated to %s at %s", last.Digest, last.Timestamp.Format(time.RFC3339Nano))
-	s.logf("Current schema: %s", latestHash)
-	s.logf("Target schema:  %s", curHash)
+	s.logf("Database schema: %s", latestHash)
+	s.logf("Target schema:   %s", curHash)
 
 	// N.B. It is possible that a given schema will repeat in the history.  In
 	// that case, however, it doesn't matter which one we start from: All the
@@ -299,7 +299,7 @@ func (s *Schema) Check() error {
 		last = u.Target
 	}
 	if last != "" && last != hc {
-		errs = append(errs, fmt.Errorf("missing upgrade from %s to %s", last, hc))
+		errs = append(errs, fmt.Errorf("missing upgrade from %s to target %s", last, hc))
 	}
 	return errors.Join(errs...)
 }
@@ -345,6 +345,13 @@ func SQLDigest(text string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// N.B. We don't include the SQL in the hash for tables, since it can be
+	// mangled by ALTER TABLE executions. We rely on the Columns instead.
+	for i, r := range sr {
+		if r.Type == "table" {
+			sr[i].SQL = ""
+		}
+	}
 	h := sha256.New()
 	json.NewEncoder(h).Encode(sr)
 	return hex.EncodeToString(h.Sum(nil)), nil
@@ -356,6 +363,13 @@ func DBDigest(ctx context.Context, db DBConn) (string, error) {
 	sr, err := readSchema(ctx, db, "main")
 	if err != nil {
 		return "", err
+	}
+	// N.B. We don't include the SQL in the hash for tables, since it can be
+	// mangled by ALTER TABLE executions. We rely on the Columns instead.
+	for i, r := range sr {
+		if r.Type == "table" {
+			sr[i].SQL = ""
+		}
 	}
 	h := sha256.New()
 	json.NewEncoder(h).Encode(sr)
