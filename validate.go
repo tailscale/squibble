@@ -174,8 +174,8 @@ func readColumns(ctx context.Context, db DBConn, root, table string) ([]schemaCo
 			return nil, fmt.Errorf("scan %s columns: %w", table, err)
 		}
 		out = append(out, schemaCol{
-			Name:       name,
-			Type:       ctype,
+			Name:       strings.ToLower(name),  // normalize
+			Type:       strings.ToUpper(ctype), // normalize
 			NotNull:    notNull != 0,
 			Default:    defValue,
 			PrimaryKey: isPK != 0,
