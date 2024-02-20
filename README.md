@@ -117,3 +117,96 @@ current database is `data.db`.
    `squibble.Exec` function can be helpful for simple changes.
 
    You should delete the comment before merging the rule, for legibility.
+
+## Mixing Migration and In-Place Updates
+
+Some schema changes can be done "in-place", simply by re-applying the schema
+without any other migration steps. Typical examples include the addition or
+removal of whole tables, views, indexes, or triggers, which can be applied
+conditionally with statements like:
+
+```sql
+CREATE TABLE IF NOT EXISTS Foo ( ... )
+
+DROP VIEW IF EXISTS Bar;
+```
+
+I generally recommend you _not_ combine this style of update with use of the
+schema migrator. It works fine to do so, but adds extra friction.
+
+If you do want to manage schema changes this way, you should apply the updated
+schema _before_ calling the `Apply` method of the `squibble.Schema`.  If the
+new schema has changes that are not compatible with the known migration state,
+the `Apply` method will report an error, and you can add an appropriate
+migration step.
+
+For example, suppose you have this schema:
+
+```sql
+-- Schema 1
+CREATE TABLE IF NOT EXISTS Foo (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL
+);
+```
+
+After executing Schema 1, the migrator will be satisfied: The schema before
+migration already looks like Schema 1, so there is nothing to do.
+
+Now say you add a new column:
+
+```sql
+-- Schema 2
+CREATE TABLE IF NOT EXISTS Foo (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  important BOOL   -- new column
+);
+```
+
+When executing Schema 2, the database does not change: Table `Foo` already
+exists, so SQLite does not do anything. But the migrator sees that the schema
+has changed and it doesn't have a migration rule, so you will have to add one:
+
+```go
+Updates: []squibble.UpdateRule{{
+   Source: "7e4799f89f03e9913d309f50c4cc70963fc5607fb335aa318f9c246fdd336488",
+   Target: "dee76ad0f980b8a5b419c4269559576d8413666adfe4a882e77f17b5792cca01",
+   Apply:  squibble.Exec(`ALTER TABLE Foo ADD COLUMN important BOOL`),
+}}
+```
+
+and the migrator will be happy. Now say you add a new table:
+
+```sql
+-- Schema 3
+CREATE TABLE IF NOT EXISTS Foo (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  important BOOL   -- added in schema 2
+);
+
+CREATE TABLE IF NOT EXISTS Bar (comment TEXT NOT NULL);
+```
+
+This executes just fine, but now the state of the database seen by the migrator
+is different from the last state it has an update for: It has no migration rule
+to go from dee76ad0f980b8a5b419c4269559576d8413666adfe4a882e77f17b5792cca01 to
+30233f4462f18d591795b1f8b455a5daf3b19c8786e90ec94daf8d3825de0320, which is the
+state of the database after Schema 3 was applied.
+
+The migrator needs a rule for this, but the rule can be a no-op:
+
+```sql
+Updates: []squibble.UpdateRule{{
+   Source: "7e4799f89f03e9913d309f50c4cc70963fc5607fb335aa318f9c246fdd336488",
+   Target: "dee76ad0f980b8a5b419c4269559576d8413666adfe4a882e77f17b5792cca01",
+   Apply:  squibble.Exec(`ALTER TABLE Foo ADD COLUMN important BOOL`),
+}, {
+   // This rule tells the migrator how to get to the current state, but
+   // the change was already handled by the schema directly.
+   Source: "dee76ad0f980b8a5b419c4269559576d8413666adfe4a882e77f17b5792cca01",
+   Target: "30233f4462f18d591795b1f8b455a5daf3b19c8786e90ec94daf8d3825de0320",
+   Apply:  squibble.NoAction, // does nothing, just marks an update
+}}
+```
