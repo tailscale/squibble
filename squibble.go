@@ -69,9 +69,21 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+
+	_ "embed"
 )
 
-const historyTableName = "_schema_history"
+const (
+	// historyTableName is the name of the history log table maintained by the
+	// Schema migrator in a database under its management. See history.sql.
+	historyTableName = "_schema_history"
+
+	queryHistoryRows   = `SELECT timestamp, digest, schema FROM ` + historyTableName + ` ORDER BY timestamp`
+	queryHistoryInsert = `INSERT INTO ` + historyTableName + ` (timestamp, digest, schema) VALUES (?, ?, ?)`
+)
+
+//go:embed history.sql
+var historyTableSchema string
 
 // Schema defines a family of SQLite schema versions over time, expressed as a
 // SQL definition of the current version of the schema, plus an ordered
@@ -150,11 +162,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 
 	// Stage 1: Create the schema versions table, if it does not exist.
 	// TODO(creachadair): Plumb an option for the table name.
-	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-  timestamp INTEGER UNIQUE NOT NULL,  -- Unix epoch microseconds.
-  digest TEXT NOT NULL,               -- hex-coded SHA256 of schema runout
-  schema BLOB                         -- zstd-compressed schema text (optional)
-)`, historyTableName)); err != nil {
+	if _, err := tx.ExecContext(ctx, historyTableSchema); err != nil {
 		return fmt.Errorf("create schema history: %w", err)
 	}
 
@@ -247,10 +255,8 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 }
 
 func (s *Schema) addVersion(ctx context.Context, tx *sql.Tx, version HistoryRow) error {
-	_, err := tx.ExecContext(ctx, fmt.Sprintf(
-		`INSERT INTO %s (timestamp, digest, schema) VALUES (?, ?, ?)`, historyTableName),
-		version.Timestamp.UnixMicro(), version.Digest, compress(version.Schema),
-	)
+	_, err := tx.ExecContext(ctx, queryHistoryInsert,
+		version.Timestamp.UnixMicro(), version.Digest, compress(version.Schema))
 	if err != nil {
 		return fmt.Errorf("record schema %s: %w", version.Digest, err)
 	}
@@ -307,9 +313,7 @@ func (s *Schema) Check() error {
 // History reports the history of schema upgrades recorded by db in
 // chronological order.
 func History(ctx context.Context, db DBConn) ([]HistoryRow, error) {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(
-		`SELECT timestamp, digest, schema FROM %s ORDER BY timestamp`, historyTableName,
-	))
+	rows, err := db.QueryContext(ctx, queryHistoryRows)
 	if err != nil {
 		return nil, err
 	}
