@@ -139,8 +139,10 @@ func readSchema(ctx context.Context, db DBConn, root string) ([]schemaRow, error
 		var sql sql.NullString
 		if err := rows.Scan(&rtype, &name, &tblName, &sql); err != nil {
 			return nil, fmt.Errorf("scan %s schema: %w", root, err)
-		} else if tblName == "_schema_history" {
-			continue // skip the history table and its indices
+		} else if tblName == "_schema_history" || tblName == "sqlite_sequence" {
+			continue // skip the history and sequence tables and their indices
+		} else if strings.HasPrefix(name, "sqlite_autoindex_") {
+			continue // skip auto-generates SQLite indices
 		}
 		out = append(out, schemaRow{Type: rtype, Name: name, TableName: tblName, SQL: sql.String})
 
