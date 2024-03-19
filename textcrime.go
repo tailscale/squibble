@@ -86,3 +86,5 @@ func cleanLines(s string) []string {
 	}
 	return lines
 }
+
+func cleanSQL(s string) string { return strings.Join(cleanLines(s), " ") }

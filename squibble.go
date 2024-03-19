@@ -354,6 +354,8 @@ func SQLDigest(text string) (string, error) {
 	for i, r := range sr {
 		if r.Type == "table" {
 			sr[i].SQL = ""
+		} else {
+			sr[i].SQL = cleanSQL(sr[i].SQL)
 		}
 	}
 	h := sha256.New()
@@ -373,6 +375,8 @@ func DBDigest(ctx context.Context, db DBConn) (string, error) {
 	for i, r := range sr {
 		if r.Type == "table" {
 			sr[i].SQL = ""
+		} else {
+			sr[i].SQL = cleanSQL(sr[i].SQL)
 		}
 	}
 	h := sha256.New()
