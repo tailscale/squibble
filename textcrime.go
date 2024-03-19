@@ -32,7 +32,7 @@ func diffSchema(ar, br []schemaRow) string {
 		if !ok {
 			fmt.Fprintf(&sb, "\n>> Remove %s %q\n", r.Type, r.Name)
 		} else if len(r.Columns) == 0 && len(o.Columns) == 0 {
-			sd := mdiff.New(mdiff.Lines(r.SQL), mdiff.Lines(o.SQL)).AddContext(2).Unify()
+			sd := mdiff.New(cleanLines(r.SQL), cleanLines(o.SQL)).AddContext(2).Unify()
 			if len(sd.Edits) != 0 {
 				fmt.Fprintf(&sb, "\n>> Modify %s %q\n", r.Type, r.Name)
 				mdiff.FormatUnified(&sb, sd, mdiff.NoHeader)
@@ -77,4 +77,12 @@ func diffColumns(w io.Writer, dc []slice.Edit[schemaCol], lhs, rhs []schemaCol) 
 			}
 		}
 	}
+}
+
+func cleanLines(s string) []string {
+	lines := mdiff.Lines(s)
+	for i, s := range lines {
+		lines[i] = strings.TrimSpace(s)
+	}
+	return lines
 }
