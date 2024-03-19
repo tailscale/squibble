@@ -2,8 +2,8 @@ github.com/creachadair/command v0.1.12 h1:i54ZLq0demWH4ekKTzl8wZnqGOOdh2HhEMgQFS
 github.com/creachadair/command v0.1.12/go.mod h1:YKwUE49nAi8qxLl8jCQ0GMPvwdxmIBkJW3LqxgZ7ljk=
 github.com/creachadair/flax v0.0.0-20240212192608-428acafa3bbe h1:Za5bZ3VxQXRJqfxcHnkmgk7FfmPxT4N1TjwlKjnkvlw=
 github.com/creachadair/flax v0.0.0-20240212192608-428acafa3bbe/go.mod h1:2vVCsqiB+GpV/qBKCQ0lKRrJhlKUPdI83SnaFKwJyNo=
-github.com/creachadair/mds v0.13.1 h1:U0DVe2ek1MNZWU95DktD32P3l9jgESrfXd6bLfIP2jQ=
-github.com/creachadair/mds v0.13.1/go.mod h1:4vrFYUzTXMJpMBU+OA292I6IUxKWCCfZkgXg+/kBZMo=
+github.com/creachadair/mds v0.13.2 h1:0y3zewnVsJfnI1+Gu8cMWu0v0g0/BiMxaqYsDGADEF8=
+github.com/creachadair/mds v0.13.2/go.mod h1:4vrFYUzTXMJpMBU+OA292I6IUxKWCCfZkgXg+/kBZMo=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=

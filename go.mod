@@ -5,7 +5,7 @@ go 1.22.0
 require (
 	github.com/creachadair/command v0.1.12
 	github.com/creachadair/flax v0.0.0-20240212192608-428acafa3bbe
-	github.com/creachadair/mds v0.13.1
+	github.com/creachadair/mds v0.13.2
 	github.com/klauspost/compress v1.17.7
 	modernc.org/sqlite v1.29.5
 )
