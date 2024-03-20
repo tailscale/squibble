@@ -342,15 +342,12 @@ type HistoryRow struct {
 	Schema    string    `json:"sql,omitempty"` // The SQL of the schema at this update
 }
 
-// SQLDigest computes a hex-encoded SHA256 digest of the SQLite schema encoded
-// by the specified string.
-func SQLDigest(text string) (string, error) {
-	sr, err := schemaTextToRows(context.Background(), text)
-	if err != nil {
-		return "", err
-	}
+func schemaDigest(sr []schemaRow) string {
 	// N.B. We don't include the SQL in the hash for tables, since it can be
 	// mangled by ALTER TABLE executions. We rely on the Columns instead.
+	//
+	// For other types with SQL definitions (e.g., views) we use the SQL with
+	// the whitespace normalized, since that is not affected by ALTER TABLE.
 	for i, r := range sr {
 		if r.Type == "table" {
 			sr[i].SQL = ""
@@ -360,7 +357,17 @@ func SQLDigest(text string) (string, error) {
 	}
 	h := sha256.New()
 	json.NewEncoder(h).Encode(sr)
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// SQLDigest computes a hex-encoded SHA256 digest of the SQLite schema encoded
+// by the specified string.
+func SQLDigest(text string) (string, error) {
+	sr, err := schemaTextToRows(context.Background(), text)
+	if err != nil {
+		return "", err
+	}
+	return schemaDigest(sr), nil
 }
 
 // DBDigest computes a hex-encoded SHA256 digest of the SQLite schema encoded in
@@ -370,18 +377,7 @@ func DBDigest(ctx context.Context, db DBConn) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// N.B. We don't include the SQL in the hash for tables, since it can be
-	// mangled by ALTER TABLE executions. We rely on the Columns instead.
-	for i, r := range sr {
-		if r.Type == "table" {
-			sr[i].SQL = ""
-		} else {
-			sr[i].SQL = cleanSQL(sr[i].SQL)
-		}
-	}
-	h := sha256.New()
-	json.NewEncoder(h).Encode(sr)
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return schemaDigest(sr), nil
 }
 
 func compress(text string) []byte {
