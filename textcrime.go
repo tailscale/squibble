@@ -16,46 +16,57 @@ import (
 // from ar to br, using the normalized form from the SQLite sqlite_schema
 // table.
 func diffSchema(ar, br []schemaRow) string {
-	key := func(r schemaRow) string { return r.Type + "\t" + r.Name }
-	lhs := make(map[string]schemaRow)
+	lhs := make(map[mapKey]schemaRow)
 	for _, r := range ar {
-		lhs[key(r)] = r
+		lhs[r.mapKey()] = r
 	}
-	rhs := make(map[string]schemaRow)
+	rhs := make(map[mapKey]schemaRow)
 	for _, r := range br {
-		rhs[key(r)] = r
+		rhs[r.mapKey()] = r
 	}
 
 	var sb strings.Builder
 	for _, r := range ar {
-		o, ok := rhs[key(r)]
+		o, ok := rhs[r.mapKey()]
 		if !ok {
 			fmt.Fprintf(&sb, "\n>> Remove %s %q\n", r.Type, r.Name)
-		} else if len(r.Columns) == 0 && len(o.Columns) == 0 {
+			continue
+		}
+
+		// Indices and views do not have columns, so diff those using their
+		// normalized SQL representation.
+		if len(r.Columns) == 0 && len(o.Columns) == 0 {
 			sd := mdiff.New(cleanLines(r.SQL), cleanLines(o.SQL)).AddContext(2).Unify()
 			if len(sd.Edits) != 0 {
 				fmt.Fprintf(&sb, "\n>> Modify %s %q\n", r.Type, r.Name)
 				mdiff.FormatUnified(&sb, sd, mdiff.NoHeader)
 			}
-		} else if dc := slice.EditScript(r.Columns, o.Columns); len(dc) != 0 {
-			fmt.Fprintf(&sb, "\n>> Modify %s %q\n", r.Type, r.Name)
-			diffColumns(&sb, dc, r.Columns, o.Columns)
+			continue
 		}
+
+		// For tables, diff the columns (this requires that they are already sorted).
+		dc := slice.EditScript(r.Columns, o.Columns)
+		if len(dc) == 0 {
+			continue // no difference
+		}
+		fmt.Fprintf(&sb, "\n>> Modify %s %q\n", r.Type, r.Name)
+		diffColumns(&sb, dc, r.Columns, o.Columns)
 	}
 	for _, r := range br {
-		if _, ok := lhs[key(r)]; !ok && r.SQL != "" {
-			fmt.Fprintf(&sb, "\n>> Add %s %q\n", r.Type, r.Name)
+		if _, ok := lhs[r.mapKey()]; ok {
+			continue // we already dealt with this above
+		}
+		fmt.Fprintf(&sb, "\n>> Add %s %q\n", r.Type, r.Name)
+		if r.SQL != "" {
 			indentLines(&sb, "+", r.SQL)
 		}
 	}
 	return sb.String()
 }
 
+// indentLines writes the lines of text to w, each indented with indent.
 func indentLines(w io.Writer, indent, text string) {
-	if text == "" {
-		return
-	}
-	for _, line := range strings.Split(text, "\n") {
+	for _, line := range mdiff.Lines(text) {
 		fmt.Fprintln(w, indent, line)
 	}
 }
@@ -79,6 +90,8 @@ func diffColumns(w io.Writer, dc []slice.Edit[schemaCol], lhs, rhs []schemaCol) 
 	}
 }
 
+// cleanLines returns the lines of s "cleaned" by removing leading and trailing
+// whitespace from them.
 func cleanLines(s string) []string {
 	lines := mdiff.Lines(s)
 	for i, s := range lines {
@@ -87,4 +100,6 @@ func cleanLines(s string) []string {
 	return lines
 }
 
+// cleanSQL returns a "clean" copy of s, in which leading and trailing
+// whitespace on each line has been removed.
 func cleanSQL(s string) string { return strings.Join(cleanLines(s), " ") }

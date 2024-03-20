@@ -68,6 +68,12 @@ type schemaRow struct {
 	SQL       string      // the text of the definition (maybe)
 }
 
+type mapKey struct {
+	Type, Name string
+}
+
+func (s schemaRow) mapKey() mapKey { return mapKey{s.Type, s.Name} }
+
 type schemaCol struct {
 	Name       string // column name
 	Type       string // type description
@@ -82,6 +88,8 @@ func (c schemaCol) String() string {
 	fmt.Fprintf(&sb, "%q %s", c.Name, c.Type)
 	if c.NotNull {
 		fmt.Fprint(&sb, " not null")
+	} else {
+		fmt.Fprint(&sb, " null")
 	}
 	if c.Default != nil {
 		fmt.Fprintf(&sb, " default=%v", c.Default)
