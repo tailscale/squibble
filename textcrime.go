@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/creachadair/mds/mdiff"
+	"github.com/creachadair/mds/mstr"
 	"github.com/creachadair/mds/slice"
 )
 
@@ -66,7 +67,7 @@ func diffSchema(ar, br []schemaRow) string {
 
 // indentLines writes the lines of text to w, each indented with indent.
 func indentLines(w io.Writer, indent, text string) {
-	for _, line := range mdiff.Lines(text) {
+	for _, line := range mstr.Lines(text) {
 		fmt.Fprintln(w, indent, line)
 	}
 }
@@ -93,7 +94,7 @@ func diffColumns(w io.Writer, dc []slice.Edit[schemaCol], lhs, rhs []schemaCol) 
 // cleanLines returns the lines of s "cleaned" by removing leading and trailing
 // whitespace from them.
 func cleanLines(s string) []string {
-	lines := mdiff.Lines(s)
+	lines := mstr.Lines(s)
 	for i, s := range lines {
 		lines[i] = strings.TrimSpace(s)
 	}
