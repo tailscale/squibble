@@ -32,7 +32,7 @@ func Validate(ctx context.Context, db DBConn, schema string) error {
 }
 
 func schemaTextToRows(ctx context.Context, schema string) ([]schemaRow, error) {
-	vdb, err := sql.Open("sqlite", ":memory:")
+	vdb, err := sql.Open("sqlite", "file::memory:")
 	if err != nil {
 		return nil, fmt.Errorf("create validation db: %w", err)
 	}
