@@ -37,6 +37,9 @@ func diffSchema(ar, br []schemaRow) string {
 		// Indices and views do not have columns, so diff those using their
 		// normalized SQL representation.
 		if len(r.Columns) == 0 && len(o.Columns) == 0 {
+			if cleanSQL(r.SQL) == cleanSQL(o.SQL) {
+				continue
+			}
 			sd := mdiff.New(cleanLines(r.SQL), cleanLines(o.SQL)).AddContext(2).Unify()
 			if len(sd.Edits) != 0 {
 				fmt.Fprintf(&sb, "\n>> Modify %s %q\n", r.Type, r.Name)
