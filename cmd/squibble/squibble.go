@@ -19,6 +19,7 @@ import (
 
 	"github.com/creachadair/command"
 	"github.com/creachadair/flax"
+	"github.com/creachadair/mds/slice"
 	"github.com/tailscale/squibble"
 
 	_ "modernc.org/sqlite"
@@ -55,7 +56,7 @@ The output has the form:
 			},
 			{
 				Name:     "history",
-				Usage:    "<db-path>",
+				Usage:    "<db-path> [<digest>/latest]",
 				Help:     `Print the schema history for a SQLite database.`,
 				SetFlags: command.Flags(flax.MustBind, &historyFlags),
 				Run:      command.Adapt(runHistory),
@@ -154,7 +155,7 @@ var historyFlags struct {
 	JSON bool `flag:"json,Write history records as JSON"`
 }
 
-func runHistory(env *command.Env, dbPath string) error {
+func runHistory(env *command.Env, dbPath string, digest ...string) error {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
@@ -165,6 +166,21 @@ func runHistory(env *command.Env, dbPath string) error {
 	if err != nil {
 		return err
 	}
+	if len(digest) != 0 {
+		if digest[0] == "latest" {
+			hr = hr[:1]
+		} else {
+			hr = slice.Partition(hr, func(r squibble.HistoryRow) bool {
+				for _, d := range digest {
+					if strings.HasPrefix(r.Digest, d) {
+						return true
+					}
+				}
+				return false
+			})
+		}
+	}
+
 	enc := json.NewEncoder(os.Stdout)
 	for _, h := range hr {
 		if historyFlags.JSON {
