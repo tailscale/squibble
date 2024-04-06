@@ -168,7 +168,7 @@ func runHistory(env *command.Env, dbPath string, digest ...string) error {
 	}
 	if len(digest) != 0 {
 		if digest[0] == "latest" {
-			hr = hr[:1]
+			hr = hr[len(hr)-1:]
 		} else {
 			hr = slice.Partition(hr, func(r squibble.HistoryRow) bool {
 				for _, d := range digest {
