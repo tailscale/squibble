@@ -3,9 +3,9 @@ module github.com/tailscale/squibble
 go 1.22
 
 require (
-	github.com/creachadair/command v0.1.13
-	github.com/creachadair/flax v0.0.0-20240525192034-44db93b3a8ad
-	github.com/creachadair/mds v0.14.7
+	github.com/creachadair/command v0.1.14
+	github.com/creachadair/flax v0.0.1
+	github.com/creachadair/mds v0.19.1
 	github.com/klauspost/compress v1.17.8
 	modernc.org/sqlite v1.29.10
 )
