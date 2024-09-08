@@ -65,8 +65,7 @@ The output has the form:
 			command.VersionCommand(),
 		},
 	}
-	env := root.NewEnv(nil).MergeFlags(true)
-	command.RunOrFail(env, os.Args[1:])
+	command.RunOrFail(root.NewEnv(nil), os.Args[1:])
 }
 
 var diffFlags struct {
