@@ -43,7 +43,7 @@ func diffSchema(ar, br []schemaRow) string {
 			sd := mdiff.New(cleanLines(r.SQL), cleanLines(o.SQL)).AddContext(2).Unify()
 			if len(sd.Edits) != 0 {
 				fmt.Fprintf(&sb, "\n>> Modify %s %q\n", r.Type, r.Name)
-				mdiff.FormatUnified(&sb, sd, nil)
+				sd.Format(&sb, mdiff.Unified, nil)
 			}
 			continue
 		}
