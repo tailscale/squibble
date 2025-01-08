@@ -1,13 +1,13 @@
 module github.com/tailscale/squibble
 
-go 1.22
+go 1.23
 
 require (
-	github.com/creachadair/command v0.1.15
-	github.com/creachadair/flax v0.0.1
-	github.com/creachadair/mds v0.20.0
-	github.com/klauspost/compress v1.17.8
-	modernc.org/sqlite v1.29.10
+	github.com/creachadair/command v0.1.20
+	github.com/creachadair/flax v0.0.4
+	github.com/creachadair/mds v0.22.3
+	github.com/klauspost/compress v1.17.11
+	modernc.org/sqlite v1.34.4
 )
 
 require (
@@ -17,9 +17,9 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	golang.org/x/sys v0.19.0 // indirect
+	golang.org/x/sys v0.22.0 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
-	modernc.org/libc v1.49.3 // indirect
+	modernc.org/libc v1.55.3 // indirect
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.8.0 // indirect
 	modernc.org/strutil v1.2.0 // indirect
