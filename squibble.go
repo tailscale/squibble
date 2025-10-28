@@ -5,12 +5,12 @@
 //
 // # Overview
 //
-// A Schema value manages the schema of a SQLite database that will be modified
-// over time.  The current database schema is stored in the Current field, and
-// migrations from previous versions are captured as UpdateRules.
+// A [Schema] value manages the schema of a SQLite database that will be
+// modified over time.  The current database schema is stored in the Current
+// field, and migrations from previous versions are captured as UpdateRules.
 //
-// When the program starts up, it should pass the open database to the Apply
-// method of the Schema. This verifies that the Schema is valid, then checks
+// When the program starts up, it should pass the open database to the
+// [Schema.Apply] method. This verifies that the Schema is valid, then checks
 // whether the database is up-to-date. If not, it applies any relevant update
 // rules to bring it to the current state. If Apply fails, the database is
 // rolled back.
@@ -22,11 +22,11 @@
 //
 // # Update Rules
 //
-// The Updates field of the Schema must contain an ordered list of update rules
-// for all the versions of the schema prior to the Current one, from oldest to
-// newest. Each rule has the hash of a previous schema version and a function
-// that can be applied to the database to upgrade it to the next version in
-// sequence.
+// The Updates field of the [Schema] must contain an ordered list of
+// [UpdateRule] for each version of the schema prior to the Current one from
+// oldest to newest. Each rule has the hash of a previous schema version and a
+// function that can be applied to the database to upgrade it to the next
+// version in sequence.
 //
 // When revising the schema, you must add a new rule mapping the old (existing)
 // schema to the new one. These rules are intended to be a permanent record of
@@ -45,7 +45,7 @@
 //
 // # Validation
 //
-// You use the Validate function to check that the current schema in the
+// You use the [Validate] function to check that the current schema in the
 // special sqlite_schema table maintained by SQLite matches a schema written as
 // SQL text. If not, it reports a diff describing the differences between what
 // the text wants and what the real schema has.
@@ -130,20 +130,20 @@ func (s *Schema) logf(msg string, args ...any) {
 
 type ctxSchemaKey struct{}
 
-// Logf sends a log message to the logger attached to ctx, or to log.Printf if
-// ctx does not have a logger attached. The context passed to the apply
-// function of an UpdateRule will have this set to the logger for the Schema.
+// Logf sends a log message to the logger attached to ctx, or to [log.Printf]
+// if ctx does not have a logger attached. The context passed to the apply
+// function of an UpdateRule will have this set to the logger for the [Schema].
 func Logf(ctx context.Context, msg string, args ...any) {
 	s, _ := ctx.Value(ctxSchemaKey{}).(*Schema)
 	s.logf(msg, args...)
 }
 
 // Apply applies any pending schema migrations to the given database.  It
-// reports an error immediately if s is not consistent (per Check); otherwise
-// it creates a new transaction and attempts to apply all applicable upgrades
-// to db within it. If this succeeds and the transaction commits successfully,
-// then Apply succeeds. Otherwise, the transaction is rolled back and Apply
-// reports the reason wny.
+// reports an error immediately if s is not consistent (per [Schema.Check]);
+// otherwise it creates a new transaction and attempts to apply all applicable
+// upgrades to db within it. If this succeeds and the transaction commits
+// successfully, then Apply succeeds. Otherwise, the transaction is rolled back
+// and Apply reports the reason why.
 //
 // When applying a schema to an existing unmanaged database, Apply reports an
 // error if the current schema is not compatible with the existing schema;
@@ -335,7 +335,7 @@ func History(ctx context.Context, db DBConn) ([]HistoryRow, error) {
 	return out, nil
 }
 
-// HistoryRow is a row in the schema history maintained by the Schema type.
+// HistoryRow is a row in the schema history maintained by the [Schema] type.
 type HistoryRow struct {
 	Timestamp time.Time `json:"timestamp"`     // In UTC
 	Digest    string    `json:"digest"`        // The digest of the schema at this update

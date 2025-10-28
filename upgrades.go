@@ -8,7 +8,7 @@ import (
 	"fmt"
 )
 
-// Exec returns an UpdateRule apply function that executes the specified
+// Exec returns an [UpdateRule] apply function that executes the specified
 // statements sequentially.
 func Exec(stmts ...string) func(context.Context, DBConn) error {
 	return func(ctx context.Context, db DBConn) error {

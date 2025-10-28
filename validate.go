@@ -14,8 +14,8 @@ import (
 
 // Validate checks whether the current schema of db appears to match the
 // specified schema, and reports an error if there are discrepancies.
-// An error reported by Validate has concrete type ValidationError if
-// the schemas differ.
+// An error reported by Validate has concrete type [ValidationError] if the
+// schemas differ.
 func Validate(ctx context.Context, db DBConn, schema string) error {
 	comp, err := schemaTextToRows(ctx, schema)
 	if err != nil {
@@ -48,7 +48,7 @@ func schemaTextToRows(ctx context.Context, schema string) ([]schemaRow, error) {
 	return readSchema(ctx, tx, "main")
 }
 
-// ValidationError is the concrete type of errors reported by the Validate
+// ValidationError is the concrete type of errors reported by the [Validate]
 // function.
 type ValidationError struct {
 	// Diff is a human readable summary of the difference between what was in
