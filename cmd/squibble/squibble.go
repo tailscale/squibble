@@ -69,7 +69,8 @@ The output has the form:
 }
 
 var diffFlags struct {
-	Rule bool `flag:"rule,Render the diff as a rule template"`
+	Rule   bool   `flag:"rule,Render the diff as a rule template"`
+	Ignore string `flag:"ignore-tables,Comma-separated list of tables and views to ignore when computing a diff"`
 }
 
 func runDiff(env *command.Env, dbPath, sqlPath string) error {
@@ -81,7 +82,11 @@ func runDiff(env *command.Env, dbPath, sqlPath string) error {
 	if err != nil {
 		return err
 	}
-	dbHash, err := squibble.DBDigest(env.Context(), db)
+	var opts squibble.DigestOptions
+	if diffFlags.Ignore != "" {
+		opts.IgnoreTables = strings.Split(diffFlags.Ignore, ",")
+	}
+	dbHash, err := squibble.DBDigest(env.Context(), db, &opts)
 	if err != nil {
 		return err
 	}
@@ -89,7 +94,7 @@ func runDiff(env *command.Env, dbPath, sqlPath string) error {
 	if err != nil {
 		return err
 	}
-	verr := squibble.Validate(env.Context(), db, string(sql))
+	verr := squibble.Validate(env.Context(), db, string(sql), &opts)
 
 	// Case 1: We are asked to print an update rule template.  In this case, it
 	// is an error if there is NO difference, since a template doesn't make
@@ -138,11 +143,12 @@ func runDiff(env *command.Env, dbPath, sqlPath string) error {
 }
 
 var digestFlags struct {
-	SQL bool `flag:"sql,Treat input as SQL text"`
+	SQL    bool   `flag:"sql,Treat input as SQL text"`
+	Ignore string `flag:"ignore-tables,Comma-separated list of tables and views to ignore when computing a diff"`
 }
 
 func runDigest(env *command.Env, path string) error {
-	kind, digest, err := loadDigest(env.Context(), path, digestFlags.SQL)
+	kind, digest, err := loadDigest(env.Context(), path)
 	if err != nil {
 		return fmt.Errorf("compute %s digest: %w", kind, err)
 	}
@@ -191,13 +197,17 @@ func runHistory(env *command.Env, dbPath string, digest ...string) error {
 	return nil
 }
 
-func loadDigest(ctx context.Context, path string, forceSQL bool) (kind, digest string, _ error) {
-	if !forceSQL && filepath.Ext(path) != ".sql" {
+func loadDigest(ctx context.Context, path string) (kind, digest string, _ error) {
+	var opts squibble.DigestOptions
+	if digestFlags.Ignore != "" {
+		opts.IgnoreTables = strings.Split(digestFlags.Ignore, ",")
+	}
+	if !digestFlags.SQL && filepath.Ext(path) != ".sql" {
 		if _, err := os.Stat(path); err == nil {
 			db, err := sql.Open("sqlite", path)
 			if err == nil {
 				defer db.Close()
-				d, err := squibble.DBDigest(ctx, db)
+				d, err := squibble.DBDigest(ctx, db, &opts)
 				return "db", d, err
 			}
 		}

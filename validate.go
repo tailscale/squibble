@@ -10,18 +10,20 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/creachadair/mds/mapset"
 )
 
 // Validate checks whether the current schema of db appears to match the
 // specified schema, and reports an error if there are discrepancies.
 // An error reported by Validate has concrete type [ValidationError] if the
-// schemas differ.
-func Validate(ctx context.Context, db DBConn, schema string) error {
+// schemas differ. A nil opts is valid and provides default options.
+func Validate(ctx context.Context, db DBConn, schema string, opts *DigestOptions) error {
 	comp, err := schemaTextToRows(ctx, schema)
 	if err != nil {
 		return err
 	}
-	main, err := readSchema(ctx, db, "main")
+	main, err := readSchema(ctx, db, "main", opts)
 	if err != nil {
 		return err
 	}
@@ -45,7 +47,7 @@ func schemaTextToRows(ctx context.Context, schema string) ([]schemaRow, error) {
 	if _, err := tx.ExecContext(ctx, schema); err != nil {
 		return nil, fmt.Errorf("compile schema: %w", err)
 	}
-	return readSchema(ctx, tx, "main")
+	return readSchema(ctx, tx, "main", nil)
 }
 
 // ValidationError is the concrete type of errors reported by the [Validate]
@@ -133,7 +135,12 @@ type DBConn interface {
 // readSchema reads the schema for the specified database and returns the
 // resulting rows sorted into a stable order. Rows belonging to the history
 // table and any affiliated indices are filtered out.
-func readSchema(ctx context.Context, db DBConn, root string) ([]schemaRow, error) {
+func readSchema(ctx context.Context, db DBConn, root string, opts *DigestOptions) ([]schemaRow, error) {
+	// Skip the history and sequence tables and their indices, along with any
+	// additional tables and views recorded in the options.
+	ignore := mapset.New(opts.ignoreTables()...)
+	ignore.Add("_schema_history", "sqlite_sequence")
+
 	rows, err := db.QueryContext(ctx,
 		fmt.Sprintf(`SELECT type, name, tbl_name, sql FROM %s.sqlite_schema`, root),
 	)
@@ -147,8 +154,8 @@ func readSchema(ctx context.Context, db DBConn, root string) ([]schemaRow, error
 		var sql sql.NullString
 		if err := rows.Scan(&rtype, &name, &tblName, &sql); err != nil {
 			return nil, fmt.Errorf("scan %s schema: %w", root, err)
-		} else if tblName == "_schema_history" || tblName == "sqlite_sequence" {
-			continue // skip the history and sequence tables and their indices
+		} else if ignore.Has(tblName) {
+			continue // see above
 		} else if strings.HasPrefix(name, "sqlite_autoindex_") {
 			continue // skip auto-generates SQLite indices
 		}
@@ -200,7 +207,7 @@ func readColumns(ctx context.Context, db DBConn, root, table string) ([]schemaCo
 // essentially empty (meaning, it is either empty or contains only a history
 // table).
 func schemaIsEmpty(ctx context.Context, db DBConn, root string) bool {
-	main, err := readSchema(ctx, db, root)
+	main, err := readSchema(ctx, db, root, nil)
 	if err != nil {
 		return false
 	}
