@@ -60,7 +60,7 @@ func TestEmptySchema(t *testing.T) {
 	db := mustOpenDB(t)
 
 	invalid := new(squibble.Schema)
-	if err := invalid.Apply(context.Background(), db); err == nil {
+	if err := invalid.Apply(t.Context(), db); err == nil {
 		t.Error("Apply should have failed, but did not")
 	}
 }
@@ -70,7 +70,7 @@ func TestInitSchema(t *testing.T) {
 	const schema = `create table foo (x text)`
 
 	s := &squibble.Schema{Current: schema, Logf: t.Logf}
-	if err := s.Apply(context.Background(), db); err != nil {
+	if err := s.Apply(t.Context(), db); err != nil {
 		t.Fatalf("Apply failed: %v", err)
 	}
 	checkTableSchema(t, db, "foo", schema)
@@ -88,7 +88,7 @@ func TestUpgrade(t *testing.T) {
 
 	t.Run("InitV1", func(t *testing.T) {
 		s := &squibble.Schema{Current: v1, Logf: t.Logf}
-		if err := s.Apply(context.Background(), db); err != nil {
+		if err := s.Apply(t.Context(), db); err != nil {
 			t.Fatalf("Apply v1: unexpected error: %v", err)
 		}
 		checkTableSchema(t, db, "foo", v1)
@@ -103,7 +103,7 @@ func TestUpgrade(t *testing.T) {
 			},
 			Logf: t.Logf,
 		}
-		if err := s.Apply(context.Background(), db); err != nil {
+		if err := s.Apply(t.Context(), db); err != nil {
 			t.Fatalf("Apply v2: unexpected error: %v", err)
 		}
 		checkTableSchema(t, db, "foo", v2)
@@ -120,7 +120,7 @@ func TestUpgrade(t *testing.T) {
 			},
 			Logf: t.Logf,
 		}
-		if err := s.Apply(context.Background(), db); err != nil {
+		if err := s.Apply(t.Context(), db); err != nil {
 			t.Fatalf("Apply v3: unexpected error: %v", err)
 		}
 		checkTableSchema(t, db, "foo", v2)
@@ -188,7 +188,7 @@ func TestUpgrade(t *testing.T) {
 	})
 
 	t.Run("History", func(t *testing.T) {
-		hr, err := squibble.History(context.Background(), db)
+		hr, err := squibble.History(t.Context(), db)
 		if err != nil {
 			t.Fatalf("History: unexpected error: %v", err)
 		}
@@ -223,7 +223,7 @@ create table bar (z integer not null)`
 
 	t.Run("InitV1", func(t *testing.T) {
 		s := &squibble.Schema{Current: v1, Logf: t.Logf}
-		if err := s.Apply(context.Background(), db); err != nil {
+		if err := s.Apply(t.Context(), db); err != nil {
 			t.Fatalf("Apply v1: unexpected error: %v", err)
 		}
 		checkTableSchema(t, db, "foo", `create table foo (x text)`)
@@ -250,14 +250,14 @@ create table bar (z integer not null)`
 			},
 			Logf: t.Logf,
 		}
-		if err := s.Apply(context.Background(), db); err != nil {
+		if err := s.Apply(t.Context(), db); err != nil {
 			t.Fatalf("Apply v3: unexpected error: %v", err)
 		}
 		checkTableSchema(t, db, "bar", `create table bar (z integer not null)`)
 	})
 
 	t.Run("History", func(t *testing.T) {
-		hr, err := squibble.History(context.Background(), db)
+		hr, err := squibble.History(t.Context(), db)
 		if err != nil {
 			t.Fatalf("History: unexpected error: %v", err)
 		}
@@ -268,13 +268,13 @@ create table bar (z integer not null)`
 	})
 
 	t.Run("Validate", func(t *testing.T) {
-		if err := squibble.Validate(context.Background(), db, v7, nil); err != nil {
+		if err := squibble.Validate(t.Context(), db, v7, nil); err != nil {
 			t.Fatal(err)
 		}
 	})
 
 	t.Run("Invalidate", func(t *testing.T) {
-		err := squibble.Validate(context.Background(), db, v1, nil)
+		err := squibble.Validate(t.Context(), db, v1, nil)
 		var ve squibble.ValidationError
 		if !errors.As(err, &ve) {
 			t.Fatalf("Validate: got %v, want %T", err, ve)
@@ -291,7 +291,7 @@ func TestBadUpgrade(t *testing.T) {
 
 	// Initialize the database with schema v1.
 	s := &squibble.Schema{Current: v1, Logf: t.Logf}
-	if err := s.Apply(context.Background(), db); err != nil {
+	if err := s.Apply(t.Context(), db); err != nil {
 		t.Fatalf("Apply initial schema: %v", err)
 	}
 
@@ -306,7 +306,7 @@ func TestBadUpgrade(t *testing.T) {
            ALTER TABLE foo ADD COLUMN z BLOB;  -- not expected
       `),
 	})
-	if err := s.Apply(context.Background(), db); err == nil {
+	if err := s.Apply(t.Context(), db); err == nil {
 		t.Error("Apply should have failed, but did not")
 	} else {
 		t.Logf("Apply: got expected error: %v", err)
@@ -323,7 +323,7 @@ func TestUnmanaged(t *testing.T) {
 	}
 
 	s := &squibble.Schema{Current: `create table u (b integer)`, Logf: t.Logf}
-	if err := s.Apply(context.Background(), db); err == nil {
+	if err := s.Apply(t.Context(), db); err == nil {
 		t.Error("Apply should have failed but did not")
 	} else if !strings.Contains(err.Error(), "unmanaged schema") {
 		t.Errorf("Apply: got %v, want unmanaged schema", err)
@@ -364,7 +364,7 @@ func TestInconsistent(t *testing.T) {
 			mustHash(t, bad2.Current))},
 	}
 	db := mustOpenDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.input.Apply(ctx, db)
@@ -384,10 +384,10 @@ func TestCompatible(t *testing.T) {
 		db := mustOpenDB(t)
 
 		s := &squibble.Schema{Current: schema, Logf: t.Logf}
-		if err := s.Apply(context.Background(), db); err != nil {
+		if err := s.Apply(t.Context(), db); err != nil {
 			t.Errorf("Apply: unexpected error: %v", err)
 		}
-		if err := squibble.Validate(context.Background(), db, schema, nil); err != nil {
+		if err := squibble.Validate(t.Context(), db, schema, nil); err != nil {
 			t.Errorf("Validate: unexpected error: %v", err)
 		}
 	})
@@ -399,10 +399,10 @@ func TestCompatible(t *testing.T) {
 		}
 
 		s := &squibble.Schema{Current: "-- compatible schema\n" + schema, Logf: t.Logf}
-		if err := s.Apply(context.Background(), db); err != nil {
+		if err := s.Apply(t.Context(), db); err != nil {
 			t.Errorf("Apply: unexpected error: %v", err)
 		}
-		if err := squibble.Validate(context.Background(), db, schema, nil); err != nil {
+		if err := squibble.Validate(t.Context(), db, schema, nil); err != nil {
 			t.Errorf("Validate: unexpected error: %v", err)
 		}
 	})
