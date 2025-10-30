@@ -79,9 +79,12 @@ func TestInitSchema(t *testing.T) {
 func TestUpgrade(t *testing.T) {
 	db := mustOpenDB(t)
 
+	// N.B.: The subtests in this test are intended to execute in order.
+
 	const v1 = `create table foo (x text)`
 	const v2 = `create table foo (x text, y text)`
 	const v3 = `create table foo (x text, y text); create table bar (z integer not null)`
+	const v4 = `create table foo (x text, z integer)`
 
 	t.Run("InitV1", func(t *testing.T) {
 		s := &squibble.Schema{Current: v1, Logf: t.Logf}
@@ -122,6 +125,66 @@ func TestUpgrade(t *testing.T) {
 		}
 		checkTableSchema(t, db, "foo", v2)
 		checkTableSchema(t, db, "bar", `create table bar (z integer not null)`)
+	})
+
+	// Add the new "__ignored__" table to the schema, representing a table that
+	// should be disregarded when comparing schema versions.
+	//
+	// The tests after this expect this table and index to be present so they
+	// can exercise the filtering by columns. Note that we specifically chose an
+	// index name that doesn't match the table, to verify that the filter is
+	// considering the affiliated table name and not the index name alone.
+	const vX = `create table __ignored__ (z integer) ; create index blahblah on __ignored__(z)`
+	if _, err := db.ExecContext(t.Context(), vX); err != nil {
+		t.Fatalf("Exec vX: %v", err)
+	}
+	checkTableSchema(t, db, "__ignored__", `create table __ignored__ (z integer)`)
+
+	t.Run("V3toVX/Filtered", func(t *testing.T) {
+		// With a table filter in place, we should be able to claim v3 is
+		// current, i.e., we will not be distracted by __ignored__ or its index.
+		s := &squibble.Schema{
+			Current:      v3,
+			Logf:         t.Logf,
+			IgnoreTables: []string{"__ignored__"}, // filter me
+		}
+		if err := s.Apply(t.Context(), db); err != nil {
+			t.Fatalf("Apply v3: unexpected error: %v", err)
+		}
+	})
+
+	t.Run("V3toVX/Unfiltered", func(t *testing.T) {
+		// However, in contrast with the above, we should get an error on v3
+		// without the filter, because __ignored__ and its index are included.
+		s := &squibble.Schema{
+			Current:      v3,
+			Logf:         t.Logf,
+			IgnoreTables: nil, // no filter
+		}
+		if err := s.Apply(t.Context(), db); err == nil {
+			t.Fatal("Apply v3: unexpectedly succeeded")
+		}
+	})
+
+	t.Run("V3toV4/Filtered", func(t *testing.T) {
+		// Upgrading to another version (v4) should work with a filter.
+		s := &squibble.Schema{
+			Current: v4,
+			Updates: []squibble.UpdateRule{
+				{mustHash(t, v3), mustHash(t, v4),
+					squibble.Exec(
+						`DROP TABLE bar`,
+						`ALTER TABLE foo DROP COLUMN y`,
+						`ALTER TABLE foo ADD COLUMN z integer`,
+					),
+				},
+			},
+			IgnoreTables: []string{"__ignored__"}, // filter me
+			Logf:         t.Logf,
+		}
+		if err := s.Apply(t.Context(), db); err != nil {
+			t.Fatalf("Apply v4: unexpected error: %v", err)
+		}
 	})
 
 	t.Run("History", func(t *testing.T) {
@@ -205,13 +268,13 @@ create table bar (z integer not null)`
 	})
 
 	t.Run("Validate", func(t *testing.T) {
-		if err := squibble.Validate(context.Background(), db, v7); err != nil {
+		if err := squibble.Validate(context.Background(), db, v7, nil); err != nil {
 			t.Fatal(err)
 		}
 	})
 
 	t.Run("Invalidate", func(t *testing.T) {
-		err := squibble.Validate(context.Background(), db, v1)
+		err := squibble.Validate(context.Background(), db, v1, nil)
 		var ve squibble.ValidationError
 		if !errors.As(err, &ve) {
 			t.Fatalf("Validate: got %v, want %T", err, ve)
@@ -324,7 +387,7 @@ func TestCompatible(t *testing.T) {
 		if err := s.Apply(context.Background(), db); err != nil {
 			t.Errorf("Apply: unexpected error: %v", err)
 		}
-		if err := squibble.Validate(context.Background(), db, schema); err != nil {
+		if err := squibble.Validate(context.Background(), db, schema, nil); err != nil {
 			t.Errorf("Validate: unexpected error: %v", err)
 		}
 	})
@@ -339,7 +402,7 @@ func TestCompatible(t *testing.T) {
 		if err := s.Apply(context.Background(), db); err != nil {
 			t.Errorf("Apply: unexpected error: %v", err)
 		}
-		if err := squibble.Validate(context.Background(), db, schema); err != nil {
+		if err := squibble.Validate(context.Background(), db, schema, nil); err != nil {
 			t.Errorf("Validate: unexpected error: %v", err)
 		}
 	})

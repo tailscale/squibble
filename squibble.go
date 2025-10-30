@@ -98,6 +98,12 @@ type Schema struct {
 	// entry for each schema version prior to the newest.
 	Updates []UpdateRule
 
+	// IgnoreTables, if non-empty, specifies the names of tables and views and
+	// associated indexes that should be ignored when computing the schema
+	// digest for the database. By default, all tables and views are included
+	// except the schema history table.
+	IgnoreTables []string
+
 	// Logf is where logs should be sent; the default is log.Printf.
 	Logf func(string, ...any)
 }
@@ -167,11 +173,12 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 	}
 
 	// Stage 2: Check whether the schema is up-to-date.
+	digestOpts := &DigestOptions{IgnoreTables: s.IgnoreTables}
 	curHash, err := SQLDigest(s.Current)
 	if err != nil {
 		return err
 	}
-	latestHash, err := DBDigest(ctx, tx)
+	latestHash, err := DBDigest(ctx, tx, digestOpts)
 	if err != nil {
 		return err
 	}
@@ -230,7 +237,7 @@ func (s *Schema) Apply(ctx context.Context, db *sql.DB) error {
 		if err := update.Apply(uctx, tx); err != nil {
 			return fmt.Errorf("update failed at digest %s: %w", update.Source, err)
 		}
-		conf, err := DBDigest(uctx, tx)
+		conf, err := DBDigest(uctx, tx, digestOpts)
 		if err != nil {
 			return fmt.Errorf("confirming update: %w", err)
 		}
@@ -371,13 +378,29 @@ func SQLDigest(text string) (string, error) {
 }
 
 // DBDigest computes a hex-encoded SHA256 digest of the SQLite schema encoded in
-// the specified database.
-func DBDigest(ctx context.Context, db DBConn) (string, error) {
-	sr, err := readSchema(ctx, db, "main")
+// the specified database. A nil opts is valid and provides default options.
+func DBDigest(ctx context.Context, db DBConn, opts *DigestOptions) (string, error) {
+	sr, err := readSchema(ctx, db, "main", opts)
 	if err != nil {
 		return "", err
 	}
 	return schemaDigest(sr), nil
+}
+
+// DigestOptions are options for computing the schema digest of a SQLite database.
+// A nil pointer is ready for use and equivalent to a zero value.
+type DigestOptions struct {
+	// Ignore these tables and views, and indexes associated with them, when
+	// computing the schema digest. By default, only the schema history table
+	// and sqlite sequence number tables are filtered.
+	IgnoreTables []string
+}
+
+func (o *DigestOptions) ignoreTables() []string {
+	if o == nil {
+		return nil
+	}
+	return o.IgnoreTables
 }
 
 func compress(text string) []byte {

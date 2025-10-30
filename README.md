@@ -210,3 +210,35 @@ Updates: []squibble.UpdateRule{{
    Apply:  squibble.NoAction, // does nothing, just marks an update
 }}
 ```
+
+## Separately-Managed Tables
+
+In some cases, you may have tables in your database that are created and
+managed by some other tool (e.g., litestream), that are not part of your schema
+but that you expect to be present. In fact, squibble maintains such a table
+itself, called `_schema_history`.
+
+By default, the migrator includes all tables, views, and indexes when it checks
+the current state of the schema. Extra tables will appear to be a change, but
+there may be no practical way for you to write update rules for them.
+
+For such cases, the `Schema` has an `IgnoreTables` field, where you can list
+the names of any tables and views you do not want it to consider part of your
+schema:
+
+```go
+var schema = &squibble.Schema{
+   Current:      dbSchema,
+   IgnoreTables: []string{"extra_actions", "_litestream_seq", "_litestream_lock"],
+
+   Updates: []squibble.UpdateRule{
+      // ...
+   },
+
+   // ...
+}
+```
+
+The updater will ignore any table or view listed here, as well as any indexes
+attached to those tables. The migrator implicitly always ignores `_schema_history`
+and the built-in SQLite `sqlite_sequence` table (used for auto-incrementings).
