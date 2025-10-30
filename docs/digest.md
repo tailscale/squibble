@@ -11,8 +11,9 @@ to identify versions. The algorithm used to compute the hash is as follows:
 - Sort the resulting tuples lexicographically by `type`, then `name`, then
   `tbl_name`, then `sql`. If any column is null, treat it as the empty string.
 
-- Remove from the resulting list any row whose `tbl_name` matches the name
-  of the schema history table (`_schema_history`).
+- Remove from the resulting list any row whose `tbl_name` matches the name of
+  the schema history table (`_schema_history`) and `sqlite_sequence`, along
+  with any other tables not intended to be managed by squibble.
 
 - Convert the tuple into a compact array of JSON objects ending with a newline:
    ```json
