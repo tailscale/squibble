@@ -63,6 +63,10 @@ func (v ValidationError) Error() string {
 }
 
 type schemaRow struct {
+	// Do not rename or reorder these fields, the JSON encoding of this struct
+	// is used as part of digest computation. If you need to add more fields,
+	// add them at the end and mark them as omitzero.
+
 	Type      string // e.g., "index", "table", "trigger", "view"
 	Name      string
 	TableName string      // affiliated table name (== Name for tables and views)
@@ -77,6 +81,10 @@ type mapKey struct {
 func (s schemaRow) mapKey() mapKey { return mapKey{s.Type, s.Name} }
 
 type schemaCol struct {
+	// Do not rename or reorder these fields, the JSON encoding of this struct
+	// is used as part of digest computation for tables. If you need to add more
+	// fields, add them at the end and mark them as omitzero.
+
 	Name       string // column name
 	Type       string // type description
 	NotNull    bool   // whether the column is marked NOT NULL
