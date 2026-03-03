@@ -15,9 +15,7 @@ to identify versions. The algorithm used to compute the hash is as follows:
   the schema history table (`_schema_history`) and `sqlite_sequence`, along
   with any other tables not intended to be managed by squibble.
 
-- Sort the rows increasing by type, name, table name, and SQL.
-
-- For each row of type `table`, record the `name`, `type`, `notull`,
+- For each row of type `table`, record the `name`, `type`, `notnull`,
   `dflt_value`, `pk`, and `hidden` fields from the output of `pragma
   table_xinfo`, and set the `SQL` field to empty.
 
