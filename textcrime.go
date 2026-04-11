@@ -78,7 +78,7 @@ func indentLines(w io.Writer, indent, text string) {
 func diffColumns(w io.Writer, dc []slice.Edit[schemaCol], lhs, rhs []schemaCol) {
 	for _, e := range dc {
 		switch e.Op {
-		case slice.OpCopy:
+		case slice.OpEmit:
 			for _, col := range e.Y {
 				fmt.Fprintf(w, " + add column %v\n", col)
 			}
